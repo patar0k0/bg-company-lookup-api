@@ -30,41 +30,225 @@ INDEX_HTML = """<!doctype html>
 <html lang="bg">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BG Company Lookup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap">
 <style>
-  :root { color-scheme: light dark; }
+  :root {
+    color-scheme: light dark;
+    --color-primary: #1E3A5F;
+    --color-secondary: #2563EB;
+    --color-accent: #059669;
+    --color-background: #F8FAFC;
+    --color-surface: #FFFFFF;
+    --color-foreground: #0F172A;
+    --color-muted-fg: #55627A;
+    --color-border: #E4E7EB;
+    --color-destructive: #DC2626;
+    --color-destructive-bg: #FEF2F2;
+    --color-ring: #1E3A5F;
+    --font-heading: 'Poppins', system-ui, sans-serif;
+    --font-body: 'Open Sans', system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-primary: #3B82F6;
+      --color-secondary: #60A5FA;
+      --color-accent: #10B981;
+      --color-background: #0B1220;
+      --color-surface: #131B2C;
+      --color-foreground: #E7ECF5;
+      --color-muted-fg: #97A3BD;
+      --color-border: #263049;
+      --color-destructive: #F87171;
+      --color-destructive-bg: #2A1416;
+      --color-ring: #60A5FA;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
   body {
-    font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto;
-    padding: 0 1rem; line-height: 1.5;
+    font-family: var(--font-body);
+    background: var(--color-background);
+    color: var(--color-foreground);
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 4rem;
+    line-height: 1.6;
+    font-size: 16px;
   }
-  h1 { font-size: 1.4rem; }
-  form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+
+  h1 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1.6rem;
+    margin: 0 0 0.4rem;
+  }
+
+  .subtitle {
+    color: var(--color-muted-fg);
+    margin: 0 0 2rem;
+    font-size: 0.95rem;
+  }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .field { margin-bottom: 1rem; }
+  .field:last-of-type { margin-bottom: 1.25rem; }
+
   input[type=text], input[type=password] {
-    flex: 1; min-width: 200px; padding: 0.5rem; font-size: 1rem;
+    width: 100%;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-background);
+    color: var(--color-foreground);
   }
-  button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
-  #status { margin: 1rem 0; font-style: italic; }
-  .error { color: #c00; font-weight: bold; }
-  .section { margin-bottom: 1.5rem; padding: 1rem; border: 1px solid #888; border-radius: 6px; }
-  .section h2 { margin-top: 0; font-size: 1.1rem; }
-  ul { padding-left: 1.2rem; }
-  a { word-break: break-all; }
+
+  input:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+
+  .hint {
+    font-size: 0.8rem;
+    color: var(--color-muted-fg);
+    margin-top: 0.3rem;
+    font-weight: 400;
+  }
+
+  button {
+    width: 100%;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: 8px;
+    background: var(--color-accent);
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 150ms ease-out;
+  }
+
+  button:hover:not(:disabled) { opacity: 0.9; }
+  button:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  #status { margin: 1rem 0; font-size: 0.9rem; color: var(--color-muted-fg); }
+
+  .error-box {
+    background: var(--color-destructive-bg);
+    border: 1px solid var(--color-destructive);
+    color: var(--color-destructive);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .section h2 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1.05rem;
+    margin: 0 0 0.85rem;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.25rem;
+    font-size: 0.9rem;
+    color: var(--color-muted-fg);
+    margin-bottom: 0.5rem;
+  }
+
+  .company-name {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1.15rem;
+    margin: 0 0 0.5rem;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: var(--color-muted-fg);
+    color: var(--color-surface);
+  }
+
+  .badge.active { background: var(--color-accent); }
+
+  .report-text { white-space: pre-wrap; font-size: 0.95rem; }
+
+  ul.sources {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  ul.sources li {
+    border: 1px solid var(--color-border); border-radius: 8px; padding: 0.6rem 0.75rem;
+  }
+  ul.sources a {
+    color: var(--color-secondary); text-decoration: none; font-size: 0.9rem;
+    word-break: break-all;
+  }
+  ul.sources a:hover { text-decoration: underline; }
+
+  .empty { color: var(--color-muted-fg); font-style: italic; font-size: 0.9rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    button { transition: none; }
+  }
 </style>
 </head>
 <body>
 <h1>Справка за българска фирма</h1>
-<form id="lookup-form">
-  <input type="text" id="q" placeholder="ЕИК или име на фирма" required>
-  <input type="password" id="token" placeholder="token">
-  <button type="submit">Провери фирма</button>
+<p class="subtitle">Официални регистърни данни + уеб проверка, обединени в един доклад.</p>
+
+<form id="lookup-form" class="card">
+  <div class="field">
+    <label for="q">ЕИК или име на фирма</label>
+    <input type="text" id="q" name="q" required autocomplete="off">
+  </div>
+  <div class="field">
+    <label for="token">Токен за достъп</label>
+    <input type="password" id="token" name="token" autocomplete="off">
+    <div class="hint">Пази се локално в браузъра ти, не се праща никъде другаде.</div>
+  </div>
+  <button type="submit" id="submit-btn">Провери фирма</button>
 </form>
-<div id="status"></div>
+
+<div id="status" role="status" aria-live="polite"></div>
 <div id="result"></div>
 
 <script>
 const form = document.getElementById('lookup-form');
 const qInput = document.getElementById('q');
 const tokenInput = document.getElementById('token');
+const submitBtn = document.getElementById('submit-btn');
 const statusEl = document.getElementById('status');
 const resultEl = document.getElementById('result');
 
@@ -78,19 +262,28 @@ function escapeHtml(str) {
 
 function renderOfficialData(data) {
   if (!data) {
-    return '<p><em>Фирмата не е намерена в официалния регистър.</em></p>';
+    return '<p class="empty">Фирмата не е намерена в официалния регистър.</p>';
   }
   const managers = (data.managers || []).map(m => escapeHtml(m.name || '?')).join(', ') || '—';
+  const status = data.status || '—';
+  const badgeClass = /акт|active/i.test(String(status)) ? 'badge active' : 'badge';
   return `
-    <p><strong>${escapeHtml(data.name || '(без име)')}</strong></p>
-    <p>ЕИК: ${escapeHtml(data.uic)} | Статус: ${escapeHtml(data.status)}</p>
-    <p>Управители: ${managers}</p>
+    <p class="company-name">${escapeHtml(data.name || '(без име)')}</p>
+    <div class="meta-row">
+      <span>ЕИК: ${escapeHtml(data.uic)}</span>
+      <span class="${badgeClass}">${escapeHtml(status)}</span>
+    </div>
+    <div class="meta-row">
+      <span>Управители: ${managers}</span>
+    </div>
   `;
 }
 
 function renderSources(sources) {
-  if (!sources || sources.length === 0) return '<p><em>Няма източници.</em></p>';
-  return '<ul>' + sources.map(s => {
+  if (!sources || sources.length === 0) {
+    return '<p class="empty">Няма източници.</p>';
+  }
+  return '<ul class="sources">' + sources.map(s => {
     const label = escapeHtml(s.title || s.url);
     const href = escapeHtml(s.url);
     return `<li><a href="${href}" target="_blank" rel="noopener">${label}</a></li>`;
@@ -103,7 +296,9 @@ form.addEventListener('submit', async (e) => {
   const token = tokenInput.value.trim();
   localStorage.setItem('bg_company_lookup_token', token);
 
-  statusEl.textContent = 'Зареждане... (може да отнеме до минута)';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Зареждане...';
+  statusEl.innerHTML = 'Зареждане... (може да отнеме до минута)';
   resultEl.innerHTML = '';
 
   try {
@@ -112,35 +307,38 @@ form.addEventListener('submit', async (e) => {
     const body = await resp.json();
 
     if (!resp.ok) {
-      statusEl.innerHTML = '<span class="error">Грешка (' + resp.status + '): ' +
-        escapeHtml(body.error || 'неизвестна грешка') + '</span>';
+      const msg = escapeHtml(body.error || 'неизвестна грешка');
+      statusEl.innerHTML = '<div class="error-box" role="alert">Грешка (' + resp.status +
+        '): ' + msg + '</div>';
       return;
     }
 
-    statusEl.textContent = '';
+    statusEl.innerHTML = '';
     resultEl.innerHTML = `
-      <div class="section">
+      <div class="card section">
         <h2>Официални данни от регистъра</h2>
         ${renderOfficialData(body.official_data)}
       </div>
-      <div class="section">
+      <div class="card section">
         <h2>Обединен доклад</h2>
-        <div>${escapeHtml(body.report).replace(/\\n/g, '<br>')}</div>
+        <div class="report-text">${escapeHtml(body.report)}</div>
       </div>
-      <div class="section">
+      <div class="card section">
         <h2>Уеб източници</h2>
         ${renderSources(body.web_context_sources)}
       </div>
     `;
   } catch (err) {
-    statusEl.innerHTML = '<span class="error">Грешка при връзка със сървъра: ' +
-      escapeHtml(err.message) + '</span>';
+    statusEl.innerHTML = '<div class="error-box" role="alert">Грешка при връзка със сървъра: ' +
+      escapeHtml(err.message) + '</div>';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Провери фирма';
   }
 });
 </script>
 </body>
-</html>
-"""
+</html>"""
 
 
 def create_app(access_token: str | None = None) -> Flask:
