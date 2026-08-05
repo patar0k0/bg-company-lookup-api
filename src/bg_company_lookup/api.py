@@ -18,7 +18,9 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 
+from bg_company_lookup import research
 from bg_company_lookup.core import CompanyNotFound, LookupServiceError, lookup
+from bg_company_lookup.research import ResearchServiceError
 
 MAX_QUERY_LENGTH = 200
 
@@ -28,6 +30,22 @@ load_dotenv()
 def create_app(access_token: str | None = None) -> Flask:
     app = Flask(__name__)
     app.config["ACCESS_TOKEN"] = access_token
+
+    def _validate_request(q_description: str) -> tuple[str, None] | tuple[None, tuple]:
+        token = app.config["ACCESS_TOKEN"]
+        if token and request.args.get("token") != token:
+            return None, (jsonify({"error": "unauthorized"}), 401)
+
+        q = (request.args.get("q") or "").strip()
+        if not q:
+            return None, (jsonify({"error": f"missing 'q' parameter ({q_description})"}), 400)
+        if len(q) > MAX_QUERY_LENGTH:
+            return None, (
+                jsonify({"error": f"'q' е твърде дълго (макс. {MAX_QUERY_LENGTH} символа)"}),
+                400,
+            )
+
+        return q, None
 
     @app.route("/api/company")
     def company():
@@ -56,6 +74,74 @@ def create_app(access_token: str | None = None) -> Flask:
         except Exception as e:  # неочаквана грешка — не изтичаме stack trace към клиента
             app.logger.exception("unexpected error handling /api/company")
             return jsonify({"error": f"unexpected error: {e}"}), 502
+
+    @app.route("/api/research")
+    def api_research():
+        q, error = _validate_request("тема за търсене")
+        if error:
+            return error
+
+        try:
+            result = research.research(q)
+            return jsonify(result)
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        except ResearchServiceError as e:
+            app.logger.error("Gemini API upstream error: %s", e)
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:  # неочаквана грешка — не изтичаме stack trace към клиента
+            app.logger.exception("unexpected error handling /api/research")
+            return jsonify({"error": f"unexpected error: {e}"}), 502
+
+    @app.route("/api/report")
+    def api_report():
+        q, error = _validate_request("name or ЕИК")
+        if error:
+            return error
+
+        try:
+            official_data = lookup(q)
+        except CompanyNotFound:
+            official_data = None
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        except LookupServiceError as e:
+            app.logger.error("companybook.bg upstream error: %s", e)
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:
+            app.logger.exception("unexpected error handling /api/report (lookup step)")
+            return jsonify({"error": f"unexpected error: {e}"}), 502
+
+        try:
+            research_result = research.research(q)
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        except ResearchServiceError as e:
+            app.logger.error("Gemini API upstream error (research): %s", e)
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:
+            app.logger.exception("unexpected error handling /api/report (research step)")
+            return jsonify({"error": f"unexpected error: {e}"}), 502
+
+        try:
+            report_text = research.cross_check(q, official_data, research_result["answer"])
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        except ResearchServiceError as e:
+            app.logger.error("Gemini API upstream error (cross_check): %s", e)
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:
+            app.logger.exception("unexpected error handling /api/report (cross_check step)")
+            return jsonify({"error": f"unexpected error: {e}"}), 502
+
+        return jsonify(
+            {
+                "query": q,
+                "report": report_text,
+                "official_data": official_data,
+                "web_context_sources": research_result["sources"],
+            }
+        )
 
     @app.route("/health")
     def health():
