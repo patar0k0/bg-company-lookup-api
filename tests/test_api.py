@@ -4,6 +4,7 @@ import pytest
 
 from bg_company_lookup.api import create_app
 from bg_company_lookup.core import CompanyNotFound, LookupServiceError
+from bg_company_lookup.research import ResearchServiceError
 
 
 @pytest.fixture
@@ -88,5 +89,47 @@ def test_company_returns_502_when_upstream_unavailable(mock_lookup, client):
     mock_lookup.side_effect = LookupServiceError("companybook.bg недостъпен")
 
     resp = client.get("/api/company", query_string={"q": "106590295"})
+
+    assert resp.status_code == 502
+
+
+def test_research_requires_q_param(client):
+    resp = client.get("/api/research")
+    assert resp.status_code == 400
+
+
+def test_research_rejects_missing_token_when_configured(protected_client):
+    resp = protected_client.get("/api/research", query_string={"q": "оборот на фирмите в БГ"})
+    assert resp.status_code == 401
+
+
+@patch("bg_company_lookup.api.research")
+def test_research_returns_answer_json(mock_research_module, client):
+    mock_research_module.research.return_value = {
+        "query": "оборот",
+        "answer": "текст",
+        "sources": [],
+    }
+
+    resp = client.get("/api/research", query_string={"q": "оборот"})
+
+    assert resp.status_code == 200
+    assert resp.get_json()["answer"] == "текст"
+
+
+@patch("bg_company_lookup.api.research")
+def test_research_returns_500_on_missing_api_key(mock_research_module, client):
+    mock_research_module.research.side_effect = RuntimeError("Липсва API ключ")
+
+    resp = client.get("/api/research", query_string={"q": "оборот"})
+
+    assert resp.status_code == 500
+
+
+@patch("bg_company_lookup.api.research")
+def test_research_returns_502_on_upstream_error(mock_research_module, client):
+    mock_research_module.research.side_effect = ResearchServiceError("Gemini недостъпен")
+
+    resp = client.get("/api/research", query_string={"q": "оборот"})
 
     assert resp.status_code == 502
