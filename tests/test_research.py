@@ -82,6 +82,17 @@ def test_research_raises_service_error_on_sdk_failure(mock_client_cls):
 
 
 @patch("bg_company_lookup.research.genai.Client")
+def test_research_returns_placeholder_when_gemini_returns_no_text(mock_client_cls):
+    mock_client_cls.return_value.models.generate_content.return_value = _mock_response(
+        text=None, with_sources=False
+    )
+
+    result = research("тестова тема", api_key="fake-key")
+
+    assert result["answer"] == "Не са намерени резултати от уеб търсенето по тази тема."
+
+
+@patch("bg_company_lookup.research.genai.Client")
 def test_cross_check_returns_report_text(mock_client_cls):
     mock_client_cls.return_value.models.generate_content.return_value = _mock_response(
         text="обединен доклад", with_sources=False

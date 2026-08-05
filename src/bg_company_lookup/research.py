@@ -26,6 +26,8 @@ FALLBACK_MODELS = (
     "gemini-2.5-flash-lite",
 )
 
+NO_ANSWER_MESSAGE = "Не са намерени резултати от уеб търсенето по тази тема."
+
 CROSS_CHECK_PROMPT_TEMPLATE = """Официални регистърни данни: {company_json}
 Резултати от уеб търсене: {research_answer}
 
@@ -126,7 +128,7 @@ def research(query: str, api_key: str | None = None, model: str | None = None) -
 
     return {
         "query": query,
-        "answer": response.text,
+        "answer": response.text or NO_ANSWER_MESSAGE,
         "sources": _extract_sources(response),
     }
 
