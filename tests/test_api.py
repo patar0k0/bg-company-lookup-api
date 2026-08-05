@@ -133,3 +133,107 @@ def test_research_returns_502_on_upstream_error(mock_research_module, client):
     resp = client.get("/api/research", query_string={"q": "оборот"})
 
     assert resp.status_code == 502
+
+
+def test_report_requires_q_param(client):
+    resp = client.get("/api/report")
+    assert resp.status_code == 400
+
+
+def test_report_rejects_missing_token_when_configured(protected_client):
+    resp = protected_client.get("/api/report", query_string={"q": "106590295"})
+    assert resp.status_code == 401
+
+
+@patch("bg_company_lookup.api.research")
+@patch("bg_company_lookup.api.lookup")
+def test_report_returns_combined_json(mock_lookup, mock_research_module, client):
+    mock_lookup.return_value = {"uic": "106590295", "name": "ДЕКОРАМЕТ"}
+    mock_research_module.research.return_value = {
+        "query": "106590295",
+        "answer": "уеб контекст",
+        "sources": [{"title": "т", "url": "u"}],
+    }
+    mock_research_module.cross_check.return_value = "обединен доклад"
+
+    resp = client.get("/api/report", query_string={"q": "106590295"})
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["report"] == "обединен доклад"
+    assert body["official_data"]["uic"] == "106590295"
+    assert body["web_context_sources"] == [{"title": "т", "url": "u"}]
+    mock_research_module.cross_check.assert_called_once_with(
+        "106590295", {"uic": "106590295", "name": "ДЕКОРАМЕТ"}, "уеб контекст"
+    )
+
+
+@patch("bg_company_lookup.api.research")
+@patch("bg_company_lookup.api.lookup")
+def test_report_degrades_when_company_not_found(mock_lookup, mock_research_module, client):
+    mock_lookup.side_effect = CompanyNotFound("не е намерена")
+    mock_research_module.research.return_value = {
+        "query": "непозната фирма",
+        "answer": "уеб контекст",
+        "sources": [],
+    }
+    mock_research_module.cross_check.return_value = "доклад само от уеб"
+
+    resp = client.get("/api/report", query_string={"q": "непозната фирма"})
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["official_data"] is None
+    assert body["report"] == "доклад само от уеб"
+    mock_research_module.cross_check.assert_called_once_with(
+        "непозната фирма", None, "уеб контекст"
+    )
+
+
+@patch("bg_company_lookup.api.research")
+@patch("bg_company_lookup.api.lookup")
+def test_report_returns_500_on_missing_companybook_key(mock_lookup, mock_research_module, client):
+    mock_lookup.side_effect = RuntimeError("Липсва API ключ")
+
+    resp = client.get("/api/report", query_string={"q": "106590295"})
+
+    assert resp.status_code == 500
+    mock_research_module.research.assert_not_called()
+
+
+@patch("bg_company_lookup.api.research")
+@patch("bg_company_lookup.api.lookup")
+def test_report_returns_502_when_lookup_upstream_fails(mock_lookup, mock_research_module, client):
+    mock_lookup.side_effect = LookupServiceError("companybook.bg недостъпен")
+
+    resp = client.get("/api/report", query_string={"q": "106590295"})
+
+    assert resp.status_code == 502
+    mock_research_module.research.assert_not_called()
+
+
+@patch("bg_company_lookup.api.research")
+@patch("bg_company_lookup.api.lookup")
+def test_report_returns_502_when_research_fails(mock_lookup, mock_research_module, client):
+    mock_lookup.return_value = {"uic": "106590295", "name": "ДЕКОРАМЕТ"}
+    mock_research_module.research.side_effect = ResearchServiceError("Gemini недостъпен")
+
+    resp = client.get("/api/report", query_string={"q": "106590295"})
+
+    assert resp.status_code == 502
+
+
+@patch("bg_company_lookup.api.research")
+@patch("bg_company_lookup.api.lookup")
+def test_report_returns_502_when_cross_check_fails(mock_lookup, mock_research_module, client):
+    mock_lookup.return_value = {"uic": "106590295", "name": "ДЕКОРАМЕТ"}
+    mock_research_module.research.return_value = {
+        "query": "106590295",
+        "answer": "уеб контекст",
+        "sources": [],
+    }
+    mock_research_module.cross_check.side_effect = ResearchServiceError("Gemini недостъпен")
+
+    resp = client.get("/api/report", query_string={"q": "106590295"})
+
+    assert resp.status_code == 502

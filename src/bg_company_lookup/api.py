@@ -93,6 +93,56 @@ def create_app(access_token: str | None = None) -> Flask:
             app.logger.exception("unexpected error handling /api/research")
             return jsonify({"error": f"unexpected error: {e}"}), 502
 
+    @app.route("/api/report")
+    def api_report():
+        q, error = _validate_request("name or ЕИК")
+        if error:
+            return error
+
+        try:
+            official_data = lookup(q)
+        except CompanyNotFound:
+            official_data = None
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        except LookupServiceError as e:
+            app.logger.error("companybook.bg upstream error: %s", e)
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:
+            app.logger.exception("unexpected error handling /api/report (lookup step)")
+            return jsonify({"error": f"unexpected error: {e}"}), 502
+
+        try:
+            research_result = research.research(q)
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        except ResearchServiceError as e:
+            app.logger.error("Gemini API upstream error (research): %s", e)
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:
+            app.logger.exception("unexpected error handling /api/report (research step)")
+            return jsonify({"error": f"unexpected error: {e}"}), 502
+
+        try:
+            report_text = research.cross_check(q, official_data, research_result["answer"])
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        except ResearchServiceError as e:
+            app.logger.error("Gemini API upstream error (cross_check): %s", e)
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:
+            app.logger.exception("unexpected error handling /api/report (cross_check step)")
+            return jsonify({"error": f"unexpected error: {e}"}), 502
+
+        return jsonify(
+            {
+                "query": q,
+                "report": report_text,
+                "official_data": official_data,
+                "web_context_sources": research_result["sources"],
+            }
+        )
+
     @app.route("/health")
     def health():
         return jsonify({"status": "ok"})
