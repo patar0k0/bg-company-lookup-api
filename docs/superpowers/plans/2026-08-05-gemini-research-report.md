@@ -247,9 +247,7 @@ def test_research_returns_answer_and_sources(mock_client_cls):
 
     assert result["query"] == "тестова тема"
     assert result["answer"] == "обобщение"
-    assert result["sources"] == [
-        {"title": "Пример Източник", "url": "https://example.bg/article"}
-    ]
+    assert result["sources"] == [{"title": "Пример Източник", "url": "https://example.bg/article"}]
 
 
 @patch("bg_company_lookup.research.genai.Client")

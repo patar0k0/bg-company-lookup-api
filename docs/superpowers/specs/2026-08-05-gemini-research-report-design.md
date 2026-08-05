@@ -37,7 +37,9 @@ Mirrors `core.py`'s style: module-level functions + typed exceptions, no classes
 class ResearchServiceError(Exception):
     """Gemini API недостъпен/грешка (аналог на LookupServiceError)."""
 
+
 DEFAULT_MODEL = "gemini-flash-lite-latest"
+
 
 def research(query: str, api_key: str | None = None, model: str | None = None) -> dict:
     """
@@ -51,8 +53,14 @@ def research(query: str, api_key: str | None = None, model: str | None = None) -
         ResearchServiceError — Gemini API call failed (network/SDK error, bad response)
     """
 
-def cross_check(query: str, official_data: dict | None, web_answer: str,
-                 api_key: str | None = None, model: str | None = None) -> str:
+
+def cross_check(
+    query: str,
+    official_data: dict | None,
+    web_answer: str,
+    api_key: str | None = None,
+    model: str | None = None,
+) -> str:
     """
     Sends the exact cross-check prompt (official registry JSON + web research answer) to
     Gemini (plain generate_content call, no grounding tool needed — comparison only) and
