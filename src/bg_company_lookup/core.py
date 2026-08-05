@@ -5,25 +5,16 @@ BG Company Lookup — wrapper around the TheCompanyBook API (companybook.bg)
 на българска фирма (ЕИК, адрес, управители, съдружници, капитал, ДДС,
 контакти, дейност, и финансови данни ако имаш абонамент/лимит за тях).
 
-Как да го използваш от твоя сайт:
-    - Backend-ът ти извиква lookup("106590295") или lookup("Декорамет ЕООД")
-    - Функцията прави 1 заявка (ако подадеш ЕИК) или 2 заявки (ако подадеш
-      само име — първо търсене за да намери ЕИК, после детайли) към
-      companybook.bg, но за ТЕБ това си остава едно извикване на lookup().
-    - Връща чист Python dict, готов да сериализираш като JSON към фронтенда си.
-
-Преди да ползваш:
-    1. Регистрирай се безплатно: https://companybook.bg/sign-up
-    2. Вземи API ключ от профила си: https://companybook.bg/account?section=security
-    3. pip install requests
-    4. Сложи ключа в env variable COMPANYBOOK_API_KEY (виж долу) или го подай директно.
-
-Лимити на безплатния план: 100 общи заявки/ден, 30 заявки/ден за финансови данни.
-Пълните данни на последната отчетна година са заключени без активен абонамент.
+Лимити на безплатния план: 100 общи заявки/ден, 30 заявки/ден за финансови
+данни. Пълните данни на последната отчетна година са заключени без активен
+абонамент.
 """
+
+from __future__ import annotations
 
 import os
 import re
+
 import requests
 
 BASE_URL = "https://api.companybook.bg"
@@ -33,32 +24,36 @@ class CompanyNotFound(Exception):
     pass
 
 
+class LookupServiceError(Exception):
+    """companybook.bg е недостъпен/не отговаря коректно (мрежова грешка и др.)."""
+
+
 def _headers(api_key: str) -> dict:
     return {"X-API-Key": api_key}
 
 
 def _looks_like_eik(value: str) -> bool:
     digits = re.sub(r"\D", "", value)
-    return digits.isdigit() and len(digits) in (9, 13) and digits == value.strip().upper().replace("BG", "")
+    normalized = value.strip().upper().replace("BG", "")
+    return digits.isdigit() and len(digits) in (9, 13) and digits == normalized
 
 
-def _resolve_eik(name: str, api_key: str) -> str:
+def _resolve_eik(name: str, api_key: str) -> tuple[str, list]:
     """Намира ЕИК по име чрез search endpoint-а (връща най-добрия match)."""
-    resp = requests.get(
-        f"{BASE_URL}/api/v2/companies/search",
-        params={"name": name, "limit": 5},
-        headers=_headers(api_key),
-        timeout=15,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    results = data.get("results", [])
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/api/v2/companies/search",
+            params={"name": name, "limit": 5},
+            headers=_headers(api_key),
+            timeout=15,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise LookupServiceError(f"companybook.bg недостъпен при търсене по име: {e}") from e
+
+    results = resp.json().get("results", [])
     if not results:
         raise CompanyNotFound(f"Няма намерена фирма с име: {name}")
-    if len(results) > 1:
-        # Връщаме първия резултат, но включваме и останалите кандидати,
-        # в случай че фронтендът иска да покаже избор на потребителя.
-        pass
     return results[0]["uic"], results
 
 
@@ -84,28 +79,15 @@ def lookup(name_or_eik: str, api_key: str | None = None, include_financial: bool
     api_key:     ако не подадеш, взима се от env variable COMPANYBOOK_API_KEY
     include_financial: дали да тегли и финансовите данни (отделна заявка, отделен дневен лимит)
 
-    Връща dict с структура:
-        {
-            "uic": "...",
-            "name": "...",
-            "legal_form": "...",
-            "status": "...",
-            "address": {...},
-            "contacts": {...},
-            "activity": {...},
-            "managers": [...],
-            "representatives": [...],
-            "partners": [...],
-            "capital": {...},
-            "vat": {...},
-            "financial": {...} or None,
-            "alternative_matches": [...]   # само ако си търсил по име и е имало >1 съвпадение
-        }
+    Хвърля:
+        RuntimeError        — липсва API ключ
+        CompanyNotFound      — няма такава фирма
+        LookupServiceError   — companybook.bg недостъпен/мрежова грешка
     """
     api_key = api_key or os.environ.get("COMPANYBOOK_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "Липсва API ключ. Подай go като аргумент или сложи COMPANYBOOK_API_KEY в env."
+            "Липсва API ключ. Подай го като аргумент или сложи COMPANYBOOK_API_KEY в env."
         )
 
     alternative_matches = []
@@ -115,14 +97,18 @@ def lookup(name_or_eik: str, api_key: str | None = None, include_financial: bool
         uic = re.sub(r"\D", "", value)
     else:
         uic, results = _resolve_eik(value, api_key)
-        alternative_matches = results[1:]  # останалите кандидати, ако има
+        alternative_matches = results[1:]
 
-    resp = requests.get(
-        f"{BASE_URL}/api/companies/{uic}",
-        params={"with_data": "true"},
-        headers=_headers(api_key),
-        timeout=15,
-    )
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/api/companies/{uic}",
+            params={"with_data": "true"},
+            headers=_headers(api_key),
+            timeout=15,
+        )
+    except requests.RequestException as e:
+        raise LookupServiceError(f"companybook.bg недостъпен: {e}") from e
+
     if resp.status_code == 404:
         raise CompanyNotFound(f"Няма фирма с ЕИК: {uic}")
     resp.raise_for_status()
@@ -164,9 +150,12 @@ def _fmt_addr(addr: dict | None) -> str:
     if not addr:
         return "—"
     parts = [
-        addr.get("street"), addr.get("streetNumber"),
-        addr.get("settlement"), addr.get("municipality"),
-        addr.get("district"), addr.get("postCode"),
+        addr.get("street"),
+        addr.get("streetNumber"),
+        addr.get("settlement"),
+        addr.get("municipality"),
+        addr.get("district"),
+        addr.get("postCode"),
     ]
     return ", ".join(p for p in parts if p) or "—"
 
@@ -196,7 +185,11 @@ def format_profile(profile: dict) -> str:
     """Превръща dict-а от lookup() в четим текстов профил (на български)."""
     lines = []
     lines.append(f"=== {profile.get('name', '(без име)')} ===")
-    lines.append(f"ЕИК: {profile.get('uic', '—')}   Правна форма: {profile.get('legal_form', '—')}   Статус: {profile.get('status', '—')}")
+    lines.append(
+        f"ЕИК: {profile.get('uic', '—')}   "
+        f"Правна форма: {profile.get('legal_form', '—')}   "
+        f"Статус: {profile.get('status', '—')}"
+    )
     lines.append("")
 
     lines.append("-- Адрес --")
@@ -269,14 +262,17 @@ def format_profile(profile: dict) -> str:
         lines.append("")
     else:
         lines.append("-- Финансови показатели --")
-        lines.append("  (няма данни, извън дневния лимит, или изисква абонамент за най-новата година)")
+        lines.append(
+            "  (няма данни, извън дневния лимит, или изисква абонамент за най-новата година)"
+        )
         lines.append("")
 
     subsidiaries = profile.get("subsidiaries") or []
     if subsidiaries:
         lines.append("-- Дъщерни фирми --")
         for s in subsidiaries:
-            lines.append(f"  - {s.get('company_name', {}).get('name', '?')} (ЕИК {s.get('uic', '?')})")
+            s_name = s.get("company_name", {}).get("name", "?")
+            lines.append(f"  - {s_name} (ЕИК {s.get('uic', '?')})")
         lines.append("")
 
     alt = profile.get("alternative_matches") or []
@@ -287,22 +283,3 @@ def format_profile(profile: dict) -> str:
         lines.append("")
 
     return "\n".join(lines)
-
-
-if __name__ == "__main__":
-    import json
-    import sys
-
-    args = sys.argv[1:]
-    as_json = "--json" in args
-    args = [a for a in args if a != "--json"]
-    query = args[0] if args else "106590295"  # Декорамет ЕООД по подразбиране
-
-    try:
-        result = lookup(query)
-        if as_json:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-        else:
-            print(format_profile(result))
-    except (CompanyNotFound, RuntimeError) as e:
-        print(f"Грешка: {e}")
