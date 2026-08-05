@@ -63,8 +63,37 @@ def _extract_sources(response) -> list[dict]:
 
 
 def research(query: str, api_key: str | None = None, model: str | None = None) -> dict:
-    _client(api_key)
-    raise NotImplementedError
+    """
+    Уеб търсене през Gemini (Google Search grounding) по зададена тема.
+
+    Връща: {"query": ..., "answer": ..., "sources": [{"title": ..., "url": ...}, ...]}
+
+    Хвърля:
+        RuntimeError         — липсва GEMINI_API_KEY
+        ResearchServiceError — Gemini API недостъпен/грешка при извикване
+    """
+    client = _client(api_key)
+    prompt = (
+        "Обобщи резултатите от търсене по следната тема на български език, "
+        "структурирано (с подходящи секции/точки), и цитирай източниците в края:\n\n"
+        f"{query}"
+    )
+    try:
+        response = client.models.generate_content(
+            model=_model_name(model),
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(google_search=types.GoogleSearch())]
+            ),
+        )
+    except Exception as e:
+        raise ResearchServiceError(f"Gemini API недостъпен: {e}") from e
+
+    return {
+        "query": query,
+        "answer": response.text,
+        "sources": _extract_sources(response),
+    }
 
 
 def cross_check(
