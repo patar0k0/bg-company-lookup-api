@@ -8,10 +8,11 @@
 
 ```
 src/bg_company_lookup/
-  core.py   — lookup(name_or_eik) + format_profile(); CompanyNotFound / LookupServiceError
-  api.py    — Flask обвивка: GET /api/company?q=...&token=...
-  cli.py    — CLI: python -m bg_company_lookup.cli <ЕИК/име> [--json]
-tests/      — pytest, мокнати HTTP заявки (не удря реалния API)
+  core.py       — lookup(name_or_eik) + format_profile(); CompanyNotFound / LookupServiceError
+  research.py   — research(query) + cross_check(...) през Gemini API; ResearchServiceError
+  api.py        — Flask обвивка: /api/company, /api/research, /api/report
+  cli.py        — CLI: python -m bg_company_lookup.cli <ЕИК/име> [--json]
+tests/          — pytest, мокнати HTTP/SDK заявки (не удря реалните API-та)
 ```
 
 ## Setup
@@ -40,9 +41,31 @@ python -m bg_company_lookup.api
 curl "http://localhost:5000/api/company?q=106590295&token=ТВОЯ_ТОКЕН"
 ```
 
+### /api/research — уеб search summary през Gemini
+
+```bash
+curl "http://localhost:5000/api/research?q=последни+новини+за+българската+икономика&token=ТВОЯ_ТОКЕН"
+```
+
+Връща `{"query", "answer", "sources"}` — `answer` е обобщение на български от Gemini
+с включен Google Search grounding tool, `sources` е списък от `{"title", "url"}`.
+
+### /api/report — регистърни данни + уеб кръстосана проверка
+
+```bash
+curl "http://localhost:5000/api/report?q=106590295&token=ТВОЯ_ТОКЕН"
+```
+
+Извиква вътрешно и `/api/company`-логиката (`core.lookup`), и `/api/research`-логиката,
+после праща двата резултата на Gemini да ги сравни — всичко от уеб search, което НЕ се
+потвърждава от официалния регистър, се отбелязва изрично като непотвърдено. Връща
+`{"query", "report", "official_data", "web_context_sources"}`. Ако фирмата не е намерена
+в официалния регистър, `official_data` е `null`, а докладът се генерира само от уеб частта.
+
 Грешки: `400` невалидна/липсваща/твърде дълга заявка, `401` грешен/липсващ
-token, `404` фирмата не е намерена, `500` липсва API ключ на сървъра, `502`
-companybook.bg е недостъпен.
+token, `404` фирмата не е намерена (само `/api/company`), `500` липсва API ключ на
+сървъра (`COMPANYBOOK_API_KEY` или `GEMINI_API_KEY`), `502` upstream (companybook.bg
+или Gemini) е недостъпен. `/api/research` и `/api/report` следват същите кодове.
 
 За продукция — зад gunicorn (Linux; `app` е достъпен в `bg_company_lookup.api`):
 
@@ -66,6 +89,10 @@ gunicorn -w 2 -b 0.0.0.0:5000 "bg_company_lookup.api:app"
 
 Плюс environment variables в dashboard-а (не се четат от `.env` — той не е в
 git): `COMPANYBOOK_API_KEY`, `SITE_ACCESS_TOKEN`.
+
+За `/api/research` и `/api/report` — и `GEMINI_API_KEY` (безплатен, без карта:
+[Google AI Studio](https://aistudio.google.com/apikey)). По избор `GEMINI_MODEL`
+(по подразбиране `gemini-flash-lite-latest`).
 
 ## Тестове и lint
 
