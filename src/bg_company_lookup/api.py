@@ -26,6 +26,122 @@ MAX_QUERY_LENGTH = 200
 
 load_dotenv()
 
+INDEX_HTML = """<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<title>BG Company Lookup</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto;
+    padding: 0 1rem; line-height: 1.5;
+  }
+  h1 { font-size: 1.4rem; }
+  form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  input[type=text], input[type=password] {
+    flex: 1; min-width: 200px; padding: 0.5rem; font-size: 1rem;
+  }
+  button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+  #status { margin: 1rem 0; font-style: italic; }
+  .error { color: #c00; font-weight: bold; }
+  .section { margin-bottom: 1.5rem; padding: 1rem; border: 1px solid #888; border-radius: 6px; }
+  .section h2 { margin-top: 0; font-size: 1.1rem; }
+  ul { padding-left: 1.2rem; }
+  a { word-break: break-all; }
+</style>
+</head>
+<body>
+<h1>Справка за българска фирма</h1>
+<form id="lookup-form">
+  <input type="text" id="q" placeholder="ЕИК или име на фирма" required>
+  <input type="password" id="token" placeholder="token">
+  <button type="submit">Провери фирма</button>
+</form>
+<div id="status"></div>
+<div id="result"></div>
+
+<script>
+const form = document.getElementById('lookup-form');
+const qInput = document.getElementById('q');
+const tokenInput = document.getElementById('token');
+const statusEl = document.getElementById('status');
+const resultEl = document.getElementById('result');
+
+tokenInput.value = localStorage.getItem('bg_company_lookup_token') || '';
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+function renderOfficialData(data) {
+  if (!data) {
+    return '<p><em>Фирмата не е намерена в официалния регистър.</em></p>';
+  }
+  const managers = (data.managers || []).map(m => escapeHtml(m.name || '?')).join(', ') || '—';
+  return `
+    <p><strong>${escapeHtml(data.name || '(без име)')}</strong></p>
+    <p>ЕИК: ${escapeHtml(data.uic)} | Статус: ${escapeHtml(data.status)}</p>
+    <p>Управители: ${managers}</p>
+  `;
+}
+
+function renderSources(sources) {
+  if (!sources || sources.length === 0) return '<p><em>Няма източници.</em></p>';
+  return '<ul>' + sources.map(s => {
+    const label = escapeHtml(s.title || s.url);
+    const href = escapeHtml(s.url);
+    return `<li><a href="${href}" target="_blank" rel="noopener">${label}</a></li>`;
+  }).join('') + '</ul>';
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = qInput.value.trim();
+  const token = tokenInput.value.trim();
+  localStorage.setItem('bg_company_lookup_token', token);
+
+  statusEl.textContent = 'Зареждане... (може да отнеме до минута)';
+  resultEl.innerHTML = '';
+
+  try {
+    const url = '/api/report?q=' + encodeURIComponent(q) + '&token=' + encodeURIComponent(token);
+    const resp = await fetch(url);
+    const body = await resp.json();
+
+    if (!resp.ok) {
+      statusEl.innerHTML = '<span class="error">Грешка (' + resp.status + '): ' +
+        escapeHtml(body.error || 'неизвестна грешка') + '</span>';
+      return;
+    }
+
+    statusEl.textContent = '';
+    resultEl.innerHTML = `
+      <div class="section">
+        <h2>Официални данни от регистъра</h2>
+        ${renderOfficialData(body.official_data)}
+      </div>
+      <div class="section">
+        <h2>Обединен доклад</h2>
+        <div>${escapeHtml(body.report).replace(/\\n/g, '<br>')}</div>
+      </div>
+      <div class="section">
+        <h2>Уеб източници</h2>
+        ${renderSources(body.web_context_sources)}
+      </div>
+    `;
+  } catch (err) {
+    statusEl.innerHTML = '<span class="error">Грешка при връзка със сървъра: ' +
+      escapeHtml(err.message) + '</span>';
+  }
+});
+</script>
+</body>
+</html>
+"""
+
 
 def create_app(access_token: str | None = None) -> Flask:
     app = Flask(__name__)
@@ -142,6 +258,10 @@ def create_app(access_token: str | None = None) -> Flask:
                 "web_context_sources": research_result["sources"],
             }
         )
+
+    @app.route("/")
+    def index():
+        return INDEX_HTML
 
     @app.route("/health")
     def health():

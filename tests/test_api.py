@@ -27,6 +27,14 @@ def test_health_returns_ok(client):
     assert resp.get_json() == {"status": "ok"}
 
 
+def test_index_returns_html_page(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "text/html" in resp.content_type
+    assert b"<form" in resp.data
+    assert b"/api/report" in resp.data
+
+
 def test_company_requires_q_param(client):
     resp = client.get("/api/company")
     assert resp.status_code == 400
