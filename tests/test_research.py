@@ -66,3 +66,35 @@ def test_research_raises_service_error_on_sdk_failure(mock_client_cls):
 
     with pytest.raises(ResearchServiceError):
         research("тестова тема", api_key="fake-key")
+
+
+@patch("bg_company_lookup.research.genai.Client")
+def test_cross_check_returns_report_text(mock_client_cls):
+    mock_client_cls.return_value.models.generate_content.return_value = _mock_response(
+        text="обединен доклад", with_sources=False
+    )
+
+    report = cross_check("тема", {"name": "Тест"}, "уеб отговор", api_key="fake-key")
+
+    assert report == "обединен доклад"
+
+
+@patch("bg_company_lookup.research.genai.Client")
+def test_cross_check_handles_company_not_found(mock_client_cls):
+    mock_client_cls.return_value.models.generate_content.return_value = _mock_response(
+        text="доклад без регистърни данни", with_sources=False
+    )
+
+    report = cross_check("тема", None, "уеб отговор", api_key="fake-key")
+
+    assert report == "доклад без регистърни данни"
+    call_kwargs = mock_client_cls.return_value.models.generate_content.call_args.kwargs
+    assert "не е намерена в официалния регистър" in call_kwargs["contents"]
+
+
+@patch("bg_company_lookup.research.genai.Client")
+def test_cross_check_raises_service_error_on_sdk_failure(mock_client_cls):
+    mock_client_cls.return_value.models.generate_content.side_effect = RuntimeError("boom")
+
+    with pytest.raises(ResearchServiceError):
+        cross_check("тема", {"name": "Тест"}, "уеб отговор", api_key="fake-key")

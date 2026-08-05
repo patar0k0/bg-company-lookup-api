@@ -103,5 +103,27 @@ def cross_check(
     api_key: str | None = None,
     model: str | None = None,
 ) -> str:
-    _client(api_key)
-    raise NotImplementedError
+    """
+    Кръстосана проверка: праща официалните регистърни данни + уеб резултатите на
+    Gemini и връща обединен доклад на български (текст), разграничаващ потвърдени
+    от непотвърдени твърдения.
+
+    Хвърля:
+        RuntimeError         — липсва GEMINI_API_KEY
+        ResearchServiceError — Gemini API недостъпен/грешка при извикване
+    """
+    client = _client(api_key)
+    company_json = (
+        json.dumps(official_data, ensure_ascii=False, indent=2)
+        if official_data is not None
+        else "(фирмата не е намерена в официалния регистър)"
+    )
+    prompt = CROSS_CHECK_PROMPT_TEMPLATE.format(
+        company_json=company_json, research_answer=research_answer
+    )
+    try:
+        response = client.models.generate_content(model=_model_name(model), contents=prompt)
+    except Exception as e:
+        raise ResearchServiceError(f"Gemini API недостъпен: {e}") from e
+
+    return response.text
