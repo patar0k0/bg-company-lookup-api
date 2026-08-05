@@ -204,11 +204,13 @@ def test_report_degrades_when_company_not_found(mock_lookup, mock_research_modul
 @patch("bg_company_lookup.api.lookup")
 def test_report_returns_500_on_missing_companybook_key(mock_lookup, mock_research_module, client):
     mock_lookup.side_effect = RuntimeError("Липсва API ключ")
+    # lookup() и research() се пускат успоредно (виж коментара в api.py), затова
+    # research() СЕ извиква дори когато lookup() гръмне пръв — не проверяваме
+    # тук, че не е извикан.
 
     resp = client.get("/api/report", query_string={"q": "106590295"})
 
     assert resp.status_code == 500
-    mock_research_module.research.assert_not_called()
 
 
 @patch("bg_company_lookup.api.research")
@@ -219,7 +221,6 @@ def test_report_returns_502_when_lookup_upstream_fails(mock_lookup, mock_researc
     resp = client.get("/api/report", query_string={"q": "106590295"})
 
     assert resp.status_code == 502
-    mock_research_module.research.assert_not_called()
 
 
 @patch("bg_company_lookup.api.research")

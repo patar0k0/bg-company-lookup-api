@@ -13,6 +13,7 @@ token-ът пази ендпойнта от чужди хора, но пак м�
 
 from __future__ import annotations
 
+import concurrent.futures
 import os
 
 from dotenv import load_dotenv
@@ -304,7 +305,15 @@ form.addEventListener('submit', async (e) => {
   try {
     const url = '/api/report?q=' + encodeURIComponent(q) + '&token=' + encodeURIComponent(token);
     const resp = await fetch(url);
-    const body = await resp.json();
+
+    let body;
+    try {
+      body = await resp.json();
+    } catch {
+      statusEl.innerHTML = '<div class="error-box" role="alert">Сървърът отговори бавно ' +
+        'или невалидно (вероятно timeout) — опитай пак след малко.</div>';
+      return;
+    }
 
     if (!resp.ok) {
       const msg = escapeHtml(body.error || 'неизвестна грешка');
@@ -413,29 +422,47 @@ def create_app(access_token: str | None = None) -> Flask:
         if error:
             return error
 
-        try:
-            official_data = lookup(q)
-        except CompanyNotFound:
-            official_data = None
-        except RuntimeError as e:
-            return jsonify({"error": str(e)}), 500
-        except LookupServiceError as e:
-            app.logger.error("companybook.bg upstream error: %s", e)
-            return jsonify({"error": str(e)}), 502
-        except Exception as e:
-            app.logger.exception("unexpected error handling /api/report (lookup step)")
-            return jsonify({"error": f"unexpected error: {e}"}), 502
+        # lookup() (companybook.bg) и research() (Gemini) не зависят един от друг —
+        # изпълняват се успоредно, за да срежем общото latency (важно за да не удряме
+        # Render-ия gateway timeout, тъй като cross_check() после добавя още едно
+        # последователно Gemini извикване).
+        official_data = None
+        research_result = None
+        early_response = None
 
-        try:
-            research_result = research.research(q)
-        except RuntimeError as e:
-            return jsonify({"error": str(e)}), 500
-        except ResearchServiceError as e:
-            app.logger.error("Gemini API upstream error (research): %s", e)
-            return jsonify({"error": str(e)}), 502
-        except Exception as e:
-            app.logger.exception("unexpected error handling /api/report (research step)")
-            return jsonify({"error": f"unexpected error: {e}"}), 502
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            lookup_future = executor.submit(lookup, q)
+            research_future = executor.submit(research.research, q)
+
+            try:
+                official_data = lookup_future.result()
+            except CompanyNotFound:
+                official_data = None
+            except RuntimeError as e:
+                early_response = (jsonify({"error": str(e)}), 500)
+            except LookupServiceError as e:
+                app.logger.error("companybook.bg upstream error: %s", e)
+                early_response = (jsonify({"error": str(e)}), 502)
+            except Exception as e:
+                app.logger.exception("unexpected error handling /api/report (lookup step)")
+                early_response = (jsonify({"error": f"unexpected error: {e}"}), 502)
+
+            try:
+                research_result = research_future.result()
+            except RuntimeError as e:
+                early_response = early_response or (jsonify({"error": str(e)}), 500)
+            except ResearchServiceError as e:
+                app.logger.error("Gemini API upstream error (research): %s", e)
+                early_response = early_response or (jsonify({"error": str(e)}), 502)
+            except Exception as e:
+                app.logger.exception("unexpected error handling /api/report (research step)")
+                early_response = early_response or (
+                    jsonify({"error": f"unexpected error: {e}"}),
+                    502,
+                )
+
+        if early_response:
+            return early_response
 
         try:
             report_text = research.cross_check(q, official_data, research_result["answer"])
