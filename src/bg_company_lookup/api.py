@@ -203,7 +203,33 @@ INDEX_HTML = """<!doctype html>
 
   .badge.active { background: var(--color-accent); }
 
-  .report-text { white-space: pre-wrap; font-size: 0.95rem; }
+  .report-text { font-size: 0.95rem; }
+  .report-text h1, .report-text h2, .report-text h3 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    margin: 1.25rem 0 0.6rem;
+  }
+  .report-text h1:first-child, .report-text h2:first-child,
+  .report-text h3:first-child { margin-top: 0; }
+  .report-text p { margin: 0 0 0.85rem; }
+  .report-text ul, .report-text ol { margin: 0 0 0.85rem; padding-left: 1.4rem; }
+  .report-text li { margin-bottom: 0.3rem; }
+  .report-text strong { font-weight: 700; }
+  .report-text hr { border: none; border-top: 1px solid var(--color-border); margin: 1.25rem 0; }
+  .report-text table {
+    border-collapse: collapse;
+    width: 100%;
+    display: block;
+    overflow-x: auto;
+    margin: 0 0 0.85rem;
+    font-size: 0.9rem;
+  }
+  .report-text th, .report-text td {
+    border: 1px solid var(--color-border);
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+  }
+  .report-text th { background: var(--color-background); font-weight: 600; }
 
   ul.sources {
     list-style: none; padding: 0; margin: 0;
@@ -245,7 +271,20 @@ INDEX_HTML = """<!doctype html>
 <div id="status" role="status" aria-live="polite"></div>
 <div id="result"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.9/lib/marked.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.13/dist/purify.min.js"></script>
 <script>
+DOMPurify.addHook('afterSanitizeAttributes', function (node) {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank');
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+});
+
+function renderMarkdown(text) {
+  return DOMPurify.sanitize(marked.parse(text || ''));
+}
+
 const form = document.getElementById('lookup-form');
 const qInput = document.getElementById('q');
 const tokenInput = document.getElementById('token');
@@ -330,7 +369,7 @@ form.addEventListener('submit', async (e) => {
       </div>
       <div class="card section">
         <h2>Обединен доклад</h2>
-        <div class="report-text">${escapeHtml(body.report)}</div>
+        <div class="report-text">${renderMarkdown(body.report)}</div>
       </div>
       <div class="card section">
         <h2>Уеб източници</h2>

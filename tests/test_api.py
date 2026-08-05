@@ -35,6 +35,8 @@ def test_index_returns_html_page(client):
     assert b"/api/report" in resp.data
     assert b'<label for="q">' in resp.data
     assert b'<label for="token">' in resp.data
+    assert b"marked@" in resp.data
+    assert b"dompurify@" in resp.data
 
 
 def test_company_requires_q_param(client):
