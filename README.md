@@ -51,6 +51,22 @@ pip install -e ".[prod]"
 gunicorn -w 2 -b 0.0.0.0:5000 "bg_company_lookup.api:app"
 ```
 
+## Деплой на Render
+
+`render.yaml` в repo-то дефинира service-а. Ако вече си създал service-а ръчно
+в dashboard-а (не през Blueprint), Render е автодетектнал Poetry от
+`pyproject.toml` и е предпълнил Build Command с `poetry install` — това **няма
+да работи**, защото проектът не е реален Poetry проект (няма `[tool.poetry]`
+секция, build-backend-ът е `setuptools`). Overwrite-ни ръчно двете полета:
+
+| Поле | Стойност |
+|---|---|
+| Build Command | `pip install -e ".[prod]"` |
+| Start Command | `gunicorn -w 2 -b 0.0.0.0:$PORT bg_company_lookup.api:app` |
+
+Плюс environment variables в dashboard-а (не се четат от `.env` — той не е в
+git): `COMPANYBOOK_API_KEY`, `SITE_ACCESS_TOKEN`.
+
 ## Тестове и lint
 
 ```bash

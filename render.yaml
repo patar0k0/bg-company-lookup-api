@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: bg-company-lookup-api
+    env: python
+    plan: free
+    buildCommand: pip install -e ".[prod]"
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT bg_company_lookup.api:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: COMPANYBOOK_API_KEY
+        sync: false
+      - key: SITE_ACCESS_TOKEN
+        sync: false
