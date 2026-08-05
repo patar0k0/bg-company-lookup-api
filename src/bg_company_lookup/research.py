@@ -16,9 +16,15 @@ import json
 import os
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
-DEFAULT_MODEL = "gemini-flash-lite-latest"
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
+
+FALLBACK_MODELS = (
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+)
 
 CROSS_CHECK_PROMPT_TEMPLATE = """Официални регистърни данни: {company_json}
 Резултати от уеб търсене: {research_answer}
@@ -44,6 +50,39 @@ def _client(api_key: str | None) -> genai.Client:
 
 def _model_name(model: str | None) -> str:
     return model or os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
+
+
+def _model_chain(model: str | None) -> list[str]:
+    """Основният модел, последван от FALLBACK_MODELS (без дублиране)."""
+    chain = [_model_name(model)]
+    for candidate in FALLBACK_MODELS:
+        if candidate not in chain:
+            chain.append(candidate)
+    return chain
+
+
+def _generate_with_fallback(client: genai.Client, contents: str, config=None, model=None):
+    """
+    Пробва моделите от _model_chain() последователно. При 429 (изчерпана квота на
+    конкретния модел) минава към следващия; при друга грешка спира веднага.
+    """
+    last_error: Exception | None = None
+    for candidate_model in _model_chain(model):
+        kwargs = {"model": candidate_model, "contents": contents}
+        if config is not None:
+            kwargs["config"] = config
+        try:
+            return client.models.generate_content(**kwargs)
+        except errors.APIError as e:
+            if e.code != 429:
+                raise ResearchServiceError(f"Gemini API недостъпен: {e}") from e
+            last_error = e
+        except Exception as e:
+            raise ResearchServiceError(f"Gemini API недостъпен: {e}") from e
+
+    raise ResearchServiceError(
+        f"Gemini API квота изчерпана за всички опитани модели: {last_error}"
+    ) from last_error
 
 
 def _extract_sources(response) -> list[dict]:
@@ -78,16 +117,12 @@ def research(query: str, api_key: str | None = None, model: str | None = None) -
         "структурирано (с подходящи секции/точки), и цитирай източниците в края:\n\n"
         f"{query}"
     )
-    try:
-        response = client.models.generate_content(
-            model=_model_name(model),
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())]
-            ),
-        )
-    except Exception as e:
-        raise ResearchServiceError(f"Gemini API недостъпен: {e}") from e
+    response = _generate_with_fallback(
+        client,
+        prompt,
+        config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
+        model=model,
+    )
 
     return {
         "query": query,
@@ -121,9 +156,6 @@ def cross_check(
     prompt = CROSS_CHECK_PROMPT_TEMPLATE.format(
         company_json=company_json, research_answer=research_answer
     )
-    try:
-        response = client.models.generate_content(model=_model_name(model), contents=prompt)
-    except Exception as e:
-        raise ResearchServiceError(f"Gemini API недостъпен: {e}") from e
+    response = _generate_with_fallback(client, prompt, model=model)
 
     return response.text

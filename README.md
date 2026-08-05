@@ -92,7 +92,9 @@ git): `COMPANYBOOK_API_KEY`, `SITE_ACCESS_TOKEN`.
 
 За `/api/research` и `/api/report` — и `GEMINI_API_KEY` (безплатен, без карта:
 [Google AI Studio](https://aistudio.google.com/apikey)). По избор `GEMINI_MODEL`
-(по подразбиране `gemini-flash-lite-latest`).
+(по подразбиране `gemini-3.5-flash-lite`, с автоматичен fallback към
+`gemini-3.1-flash-lite` и `gemini-2.5-flash-lite` при 429/изчерпана квота на
+конкретния модел).
 
 ## Тестове и lint
 

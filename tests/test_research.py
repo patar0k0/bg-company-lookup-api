@@ -1,8 +1,23 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from google.genai import errors
 
 from bg_company_lookup.research import ResearchServiceError, cross_check, research
+
+
+def _rate_limit_error():
+    return errors.ClientError(
+        429,
+        {"error": {"code": 429, "message": "quota exceeded", "status": "RESOURCE_EXHAUSTED"}},
+    )
+
+
+def _bad_request_error():
+    return errors.ClientError(
+        400,
+        {"error": {"code": 400, "message": "bad request", "status": "INVALID_ARGUMENT"}},
+    )
 
 
 def _mock_response(text="обобщение", with_sources=True):
@@ -96,3 +111,41 @@ def test_cross_check_raises_service_error_on_sdk_failure(mock_client_cls):
 
     with pytest.raises(ResearchServiceError):
         cross_check("тема", {"name": "Тест"}, "уеб отговор", api_key="fake-key")
+
+
+@patch("bg_company_lookup.research.genai.Client")
+def test_research_falls_back_to_next_model_on_429(mock_client_cls):
+    mock_client_cls.return_value.models.generate_content.side_effect = [
+        _rate_limit_error(),
+        _mock_response(with_sources=False),
+    ]
+
+    result = research("тестова тема", api_key="fake-key")
+
+    assert result["answer"] == "обобщение"
+    calls = mock_client_cls.return_value.models.generate_content.call_args_list
+    assert len(calls) == 2
+    assert calls[0].kwargs["model"] != calls[1].kwargs["model"]
+
+
+@patch("bg_company_lookup.research.genai.Client")
+def test_research_raises_after_all_models_exhausted(mock_client_cls):
+    mock_client_cls.return_value.models.generate_content.side_effect = _rate_limit_error()
+
+    with pytest.raises(ResearchServiceError):
+        research("тестова тема", api_key="fake-key")
+
+    calls = mock_client_cls.return_value.models.generate_content.call_args_list
+    # default model is already the first FALLBACK_MODELS entry, so it dedupes to 3 unique models
+    assert len(calls) == 3
+
+
+@patch("bg_company_lookup.research.genai.Client")
+def test_research_does_not_fall_back_on_non_429_api_error(mock_client_cls):
+    mock_client_cls.return_value.models.generate_content.side_effect = _bad_request_error()
+
+    with pytest.raises(ResearchServiceError):
+        research("тестова тема", api_key="fake-key")
+
+    calls = mock_client_cls.return_value.models.generate_content.call_args_list
+    assert len(calls) == 1
