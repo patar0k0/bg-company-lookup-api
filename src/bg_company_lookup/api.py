@@ -116,6 +116,15 @@ INDEX_HTML = """<!doctype html>
   .field { margin-bottom: 0.75rem; }
   .field:last-of-type { margin-bottom: 0.9rem; }
 
+  .form-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+  }
+  .form-row .field { flex: 1 1 180px; margin-bottom: 0; }
+  .form-row button { flex: 0 0 auto; width: auto; white-space: nowrap; }
+
   input[type=text], input[type=password] {
     width: 100%;
     font-family: var(--font-body);
@@ -256,6 +265,8 @@ INDEX_HTML = """<!doctype html>
   }
 
   .tab-btn {
+    width: auto;
+    flex: 0 0 auto;
     font-family: var(--font-heading);
     font-weight: 600;
     font-size: 0.8rem;
@@ -295,16 +306,18 @@ INDEX_HTML = """<!doctype html>
 <p class="subtitle">Официални регистърни данни + уеб проверка, обединени в един доклад.</p>
 
 <form id="lookup-form" class="card">
-  <div class="field">
-    <label for="q">ЕИК или име на фирма</label>
-    <input type="text" id="q" name="q" required autocomplete="off">
+  <div class="form-row">
+    <div class="field">
+      <label for="q">ЕИК или име на фирма</label>
+      <input type="text" id="q" name="q" required autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="token">Токен за достъп</label>
+      <input type="password" id="token" name="token" autocomplete="off">
+    </div>
+    <button type="submit" id="submit-btn">Провери фирма</button>
   </div>
-  <div class="field">
-    <label for="token">Токен за достъп</label>
-    <input type="password" id="token" name="token" autocomplete="off">
-    <div class="hint">Пази се локално в браузъра ти, не се праща никъде другаде.</div>
-  </div>
-  <button type="submit" id="submit-btn">Провери фирма</button>
+  <div class="hint">Пази се локално в браузъра ти, не се праща никъде другаде.</div>
 </form>
 
 <div id="status" role="status" aria-live="polite"></div>
