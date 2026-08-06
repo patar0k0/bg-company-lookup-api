@@ -80,47 +80,47 @@ INDEX_HTML = """<!doctype html>
     color: var(--color-foreground);
     max-width: 720px;
     margin: 0 auto;
-    padding: 2.5rem 1.25rem 4rem;
-    line-height: 1.6;
-    font-size: 16px;
+    padding: 1.5rem 1rem 2rem;
+    line-height: 1.5;
+    font-size: 15px;
   }
 
   h1 {
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: 1.6rem;
-    margin: 0 0 0.4rem;
+    font-size: 1.35rem;
+    margin: 0 0 0.3rem;
   }
 
   .subtitle {
     color: var(--color-muted-fg);
-    margin: 0 0 2rem;
-    font-size: 0.95rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.9rem;
   }
 
   .card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
   }
 
   label {
     display: block;
     font-weight: 600;
-    font-size: 0.875rem;
-    margin-bottom: 0.35rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.3rem;
   }
 
-  .field { margin-bottom: 1rem; }
-  .field:last-of-type { margin-bottom: 1.25rem; }
+  .field { margin-bottom: 0.75rem; }
+  .field:last-of-type { margin-bottom: 0.9rem; }
 
   input[type=text], input[type=password] {
     width: 100%;
     font-family: var(--font-body);
-    font-size: 1rem;
-    padding: 0.65rem 0.75rem;
+    font-size: 0.95rem;
+    padding: 0.5rem 0.65rem;
     border: 1px solid var(--color-border);
     border-radius: 8px;
     background: var(--color-background);
@@ -143,8 +143,8 @@ INDEX_HTML = """<!doctype html>
     width: 100%;
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: 1rem;
-    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    padding: 0.6rem 1rem;
     border: none;
     border-radius: 8px;
     background: var(--color-accent);
@@ -157,40 +157,40 @@ INDEX_HTML = """<!doctype html>
   button:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
   button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  #status { margin: 1rem 0; font-size: 0.9rem; color: var(--color-muted-fg); }
+  #status { margin: 0.75rem 0; font-size: 0.85rem; color: var(--color-muted-fg); }
 
   .error-box {
     background: var(--color-destructive-bg);
     border: 1px solid var(--color-destructive);
     color: var(--color-destructive);
     border-radius: 8px;
-    padding: 0.85rem 1rem;
-    font-size: 0.9rem;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.85rem;
     font-weight: 600;
   }
 
   .section h2 {
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: 1.05rem;
-    margin: 0 0 0.85rem;
+    font-size: 0.95rem;
+    margin: 0 0 0.6rem;
   }
 
   .meta-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem 1.25rem;
-    font-size: 0.9rem;
+    gap: 0.4rem 1rem;
+    font-size: 0.85rem;
     color: var(--color-muted-fg);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
   }
 
   .company-name {
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: 1.15rem;
-    margin: 0 0 0.5rem;
+    font-size: 1.05rem;
+    margin: 0 0 0.4rem;
   }
 
   .badge {
@@ -205,61 +205,61 @@ INDEX_HTML = """<!doctype html>
 
   .badge.active { background: var(--color-accent); }
 
-  .report-text { font-size: 0.95rem; }
+  .report-text { font-size: 0.9rem; }
   .report-text h1, .report-text h2, .report-text h3 {
     font-family: var(--font-heading);
     font-weight: 600;
-    margin: 1.25rem 0 0.6rem;
+    margin: 0.9rem 0 0.4rem;
   }
   .report-text h1:first-child, .report-text h2:first-child,
   .report-text h3:first-child { margin-top: 0; }
-  .report-text p { margin: 0 0 0.85rem; }
-  .report-text ul, .report-text ol { margin: 0 0 0.85rem; padding-left: 1.4rem; }
-  .report-text li { margin-bottom: 0.3rem; }
+  .report-text p { margin: 0 0 0.6rem; }
+  .report-text ul, .report-text ol { margin: 0 0 0.6rem; padding-left: 1.3rem; }
+  .report-text li { margin-bottom: 0.2rem; }
   .report-text strong { font-weight: 700; }
-  .report-text hr { border: none; border-top: 1px solid var(--color-border); margin: 1.25rem 0; }
+  .report-text hr { border: none; border-top: 1px solid var(--color-border); margin: 0.9rem 0; }
   .report-text table {
     border-collapse: collapse;
     width: 100%;
     display: block;
     overflow-x: auto;
-    margin: 0 0 0.85rem;
-    font-size: 0.9rem;
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
   }
   .report-text th, .report-text td {
     border: 1px solid var(--color-border);
-    padding: 0.4rem 0.6rem;
+    padding: 0.35rem 0.5rem;
     text-align: left;
   }
   .report-text th { background: var(--color-background); font-weight: 600; }
 
   ul.sources {
     list-style: none; padding: 0; margin: 0;
-    display: flex; flex-direction: column; gap: 0.5rem;
+    display: flex; flex-direction: column; gap: 0.4rem;
   }
   ul.sources li {
-    border: 1px solid var(--color-border); border-radius: 8px; padding: 0.6rem 0.75rem;
+    border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem 0.65rem;
   }
   ul.sources a {
-    color: var(--color-secondary); text-decoration: none; font-size: 0.9rem;
+    color: var(--color-secondary); text-decoration: none; font-size: 0.85rem;
     word-break: break-all;
   }
   ul.sources a:hover { text-decoration: underline; }
 
-  .empty { color: var(--color-muted-fg); font-style: italic; font-size: 0.9rem; }
+  .empty { color: var(--color-muted-fg); font-style: italic; font-size: 0.85rem; }
 
   .tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: 1rem;
+    gap: 0.35rem;
+    margin-bottom: 0.75rem;
   }
 
   .tab-btn {
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: 0.85rem;
-    padding: 0.5rem 0.9rem;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
     border: 1px solid var(--color-border);
     border-radius: 8px;
     background: var(--color-surface);
@@ -276,14 +276,14 @@ INDEX_HTML = """<!doctype html>
   .tab-panel.active { display: block; }
 
   .priority-list {
-    list-style: none; padding: 0; margin: 0.75rem 0 0;
-    display: flex; flex-direction: column; gap: 0.75rem;
+    list-style: none; padding: 0; margin: 0.6rem 0 0;
+    display: flex; flex-direction: column; gap: 0.5rem;
   }
   .priority-list li {
     border: 1px solid var(--color-border); border-radius: 8px;
-    padding: 0.6rem 0.75rem; font-size: 0.9rem;
+    padding: 0.5rem 0.65rem; font-size: 0.85rem;
   }
-  .priority-list .hint { display: block; margin-top: 0.3rem; }
+  .priority-list .hint { display: block; margin-top: 0.25rem; }
 
   @media (prefers-reduced-motion: reduce) {
     button { transition: none; }
@@ -461,7 +461,7 @@ form.addEventListener('submit', async (e) => {
         <button type="button" class="tab-btn" data-tab="sources"
           role="tab" aria-selected="false">Уеб източници</button>
         <button type="button" class="tab-btn" data-tab="priority"
-          role="tab" aria-selected="false">Оценка</button>
+          role="tab" aria-selected="false">Оценка на зелени технологии</button>
       </div>
       <div class="card section">
         <div class="tab-panel active" id="tab-official">
@@ -477,7 +477,7 @@ form.addEventListener('submit', async (e) => {
           ${renderSources(body.web_context_sources)}
         </div>
         <div class="tab-panel" id="tab-priority">
-          <h2>Оценка по приоритетни критерии</h2>
+          <h2>Оценка на зелени технологии</h2>
           ${renderPriorityAssessment(body.priority_assessment)}
         </div>
       </div>
