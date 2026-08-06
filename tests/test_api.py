@@ -37,6 +37,9 @@ def test_index_returns_html_page(client):
     assert b'<label for="token">' in resp.data
     assert b"marked@" in resp.data
     assert b"dompurify@" in resp.data
+    assert b'data-tab="priority"' in resp.data
+    assert b"tab-btn" in resp.data
+    assert "Оценка".encode() in resp.data
 
 
 def test_company_requires_q_param(client):

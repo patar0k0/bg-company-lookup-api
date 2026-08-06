@@ -248,6 +248,43 @@ INDEX_HTML = """<!doctype html>
 
   .empty { color: var(--color-muted-fg); font-style: italic; font-size: 0.9rem; }
 
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+  }
+
+  .tab-btn {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    color: var(--color-muted-fg);
+    cursor: pointer;
+  }
+
+  .tab-btn.active {
+    background: var(--color-primary); color: #fff; border-color: var(--color-primary);
+  }
+  .tab-btn:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .priority-list {
+    list-style: none; padding: 0; margin: 0.75rem 0 0;
+    display: flex; flex-direction: column; gap: 0.75rem;
+  }
+  .priority-list li {
+    border: 1px solid var(--color-border); border-radius: 8px;
+    padding: 0.6rem 0.75rem; font-size: 0.9rem;
+  }
+  .priority-list .hint { display: block; margin-top: 0.3rem; }
+
   @media (prefers-reduced-motion: reduce) {
     button { transition: none; }
   }
@@ -294,6 +331,19 @@ const submitBtn = document.getElementById('submit-btn');
 const statusEl = document.getElementById('status');
 const resultEl = document.getElementById('result');
 
+resultEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  const tab = btn.dataset.tab;
+  resultEl.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b === btn);
+    b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+  });
+  resultEl.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'tab-' + tab);
+  });
+});
+
 tokenInput.value = localStorage.getItem('bg_company_lookup_token') || '';
 
 function escapeHtml(str) {
@@ -332,6 +382,44 @@ function renderSources(sources) {
   }).join('') + '</ul>';
 }
 
+function renderPriorityAssessment(assessment) {
+  if (!assessment) {
+    return '<p class="empty">Фирмата не е намерена в официалния регистър — ' +
+      'оценката по приоритетни критерии не може да се направи.</p>';
+  }
+  const icon = (matched) => matched ? '✅' : '❌';
+  const m = assessment.municipality;
+  const a = assessment.activity;
+  const d = assessment.district;
+
+  const municipalityLine = m.matched
+    ? 'съвпада с "' + escapeHtml(m.value) + '"'
+    : 'не съвпада с приоритетния списък' + (m.value ? ' (' + escapeHtml(m.value) + ')' : '');
+
+  const divisions = (a.matched_divisions || [])
+    .map(x => escapeHtml(x.code + ' — ' + x.description)).join('; ');
+  const nkids = (a.company_nkids || [])
+    .map(x => escapeHtml((x.code || '?') + ' — ' + (x.description || ''))).join(', ') || '—';
+  const activityLine = a.matched
+    ? 'съвпада с приоритетен клас: ' + divisions
+    : 'не съвпада с приоритетния списък';
+
+  const districtLine = d.matched
+    ? 'съвпада с "' + escapeHtml(d.value) + '"'
+    : 'не съвпада с приоритетния списък' + (d.value ? ' (' + escapeHtml(d.value) + ')' : '');
+
+  return `
+    <p>${assessment.auto_matched_count} от 2 автоматично проверими критерия отговарят.</p>
+    <ul class="priority-list">
+      <li>${icon(m.matched)} <strong>Община:</strong> ${municipalityLine}</li>
+      <li>${icon(a.matched)} <strong>Икономическа дейност:</strong> ${activityLine}
+        <span class="hint">НКИД на фирмата: ${nkids}</span></li>
+      <li>${icon(d.matched)} <strong>Област на седалище:</strong> ${districtLine}
+        <span class="hint">⚠️ ${escapeHtml(d.investment_location_note)}</span></li>
+    </ul>
+  `;
+}
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = qInput.value.trim();
@@ -365,17 +453,33 @@ form.addEventListener('submit', async (e) => {
 
     statusEl.innerHTML = '';
     resultEl.innerHTML = `
-      <div class="card section">
-        <h2>Официални данни от регистъра</h2>
-        ${renderOfficialData(body.official_data)}
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab-btn active" data-tab="official"
+          role="tab" aria-selected="true">Официални данни</button>
+        <button type="button" class="tab-btn" data-tab="report"
+          role="tab" aria-selected="false">Обединен доклад</button>
+        <button type="button" class="tab-btn" data-tab="sources"
+          role="tab" aria-selected="false">Уеб източници</button>
+        <button type="button" class="tab-btn" data-tab="priority"
+          role="tab" aria-selected="false">Оценка</button>
       </div>
       <div class="card section">
-        <h2>Обединен доклад</h2>
-        <div class="report-text">${renderMarkdown(body.report)}</div>
-      </div>
-      <div class="card section">
-        <h2>Уеб източници</h2>
-        ${renderSources(body.web_context_sources)}
+        <div class="tab-panel active" id="tab-official">
+          <h2>Официални данни от регистъра</h2>
+          ${renderOfficialData(body.official_data)}
+        </div>
+        <div class="tab-panel" id="tab-report">
+          <h2>Обединен доклад</h2>
+          <div class="report-text">${renderMarkdown(body.report)}</div>
+        </div>
+        <div class="tab-panel" id="tab-sources">
+          <h2>Уеб източници</h2>
+          ${renderSources(body.web_context_sources)}
+        </div>
+        <div class="tab-panel" id="tab-priority">
+          <h2>Оценка по приоритетни критерии</h2>
+          ${renderPriorityAssessment(body.priority_assessment)}
+        </div>
       </div>
     `;
   } catch (err) {
