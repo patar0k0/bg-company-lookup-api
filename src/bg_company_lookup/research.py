@@ -23,7 +23,6 @@ DEFAULT_MODEL = "gemini-3.5-flash-lite"
 FALLBACK_MODELS = (
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
-    "gemini-2.5-flash-lite",
 )
 
 NO_ANSWER_MESSAGE = "Не са намерени резултати от уеб търсенето по тази тема."

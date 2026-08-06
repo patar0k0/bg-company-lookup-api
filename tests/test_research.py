@@ -147,8 +147,8 @@ def test_research_raises_after_all_models_exhausted(mock_client_cls):
         research("тестова тема", api_key="fake-key")
 
     calls = mock_client_cls.return_value.models.generate_content.call_args_list
-    # default model is already the first FALLBACK_MODELS entry, so it dedupes to 3 unique models
-    assert len(calls) == 3
+    # default model is already the first FALLBACK_MODELS entry, so it dedupes to 2 unique models
+    assert len(calls) == 2
 
 
 @patch("bg_company_lookup.research.genai.Client")
