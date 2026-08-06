@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 from google import genai
 from google.genai import errors, types
@@ -228,3 +229,91 @@ def find_addresses(query: str, api_key: str | None = None, model: str | None = N
     )
 
     return {"query": query, "addresses": _parse_addresses_json(response.text)}
+
+
+def _normalize_address(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"[.,]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _registry_address_text(addr: dict | None) -> str | None:
+    if not addr:
+        return None
+    parts = [
+        addr.get("street"),
+        addr.get("streetNumber"),
+        addr.get("settlement"),
+        addr.get("municipality"),
+        addr.get("district"),
+        addr.get("postCode"),
+    ]
+    text = ", ".join(p for p in parts if p)
+    return text or None
+
+
+def merge_addresses(official_data: dict | None, web_result: dict) -> list[dict]:
+    """
+    Обединява регистровите адреси (от official_data, резултат на core.lookup()) с намерените
+    в уеб адреси (от find_addresses()) в един списък, всеки маркиран със source.
+
+    Връща списък от:
+      {"address": str, "source": "registry" | "web", "label": str | None,
+       "context": str | None, "source_url": str | None, "differs_from_registry": bool | None}
+
+    label е зададен само за registry записи. differs_from_registry е None за registry записи
+    (не е приложимо) и bool за web записите — True, ако адресът не съвпада (дори частично,
+    като подниз след нормализация) с нито един регистров адрес.
+    """
+    merged = []
+    registry_texts = []
+
+    if official_data:
+        seat_text = _registry_address_text(official_data.get("address"))
+        if seat_text:
+            merged.append(
+                {
+                    "address": seat_text,
+                    "source": "registry",
+                    "label": "Адрес на управление",
+                    "context": None,
+                    "source_url": None,
+                    "differs_from_registry": None,
+                }
+            )
+            registry_texts.append(_normalize_address(seat_text))
+
+        corr_text = _registry_address_text(official_data.get("correspondence_address"))
+        if corr_text and _normalize_address(corr_text) not in registry_texts:
+            merged.append(
+                {
+                    "address": corr_text,
+                    "source": "registry",
+                    "label": "Адрес за кореспонденция",
+                    "context": None,
+                    "source_url": None,
+                    "differs_from_registry": None,
+                }
+            )
+            registry_texts.append(_normalize_address(corr_text))
+
+    for item in (web_result or {}).get("addresses", []):
+        web_text = item.get("address")
+        if not web_text:
+            continue
+        normalized_web = _normalize_address(web_text)
+        differs = not any(
+            normalized_web in reg or reg in normalized_web for reg in registry_texts
+        )
+        merged.append(
+            {
+                "address": web_text,
+                "source": "web",
+                "label": None,
+                "context": item.get("context"),
+                "source_url": item.get("source_url"),
+                "differs_from_registry": differs,
+            }
+        )
+
+    return merged

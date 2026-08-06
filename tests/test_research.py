@@ -3,7 +3,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from google.genai import errors
 
-from bg_company_lookup.research import ResearchServiceError, cross_check, find_addresses, research
+from bg_company_lookup.research import (
+    ResearchServiceError,
+    cross_check,
+    find_addresses,
+    merge_addresses,
+    research,
+)
 
 
 def _rate_limit_error():
@@ -207,6 +213,99 @@ def test_find_addresses_raises_service_error_on_sdk_failure(mock_client_cls):
 
     with pytest.raises(ResearchServiceError):
         find_addresses("Декорамет ЕООД", api_key="fake-key")
+
+
+def test_merge_addresses_lists_seat_and_correspondence_when_different():
+    official_data = {
+        "address": {"street": "ул. Първа", "streetNumber": "1", "settlement": "София"},
+        "correspondence_address": {
+            "street": "ул. Втора",
+            "streetNumber": "2",
+            "settlement": "Пловдив",
+        },
+    }
+
+    result = merge_addresses(official_data, {"addresses": []})
+
+    assert result == [
+        {
+            "address": "ул. Първа, 1, София",
+            "source": "registry",
+            "label": "Адрес на управление",
+            "context": None,
+            "source_url": None,
+            "differs_from_registry": None,
+        },
+        {
+            "address": "ул. Втора, 2, Пловдив",
+            "source": "registry",
+            "label": "Адрес за кореспонденция",
+            "context": None,
+            "source_url": None,
+            "differs_from_registry": None,
+        },
+    ]
+
+
+def test_merge_addresses_skips_duplicate_correspondence_address():
+    same_address = {"street": "ул. Първа", "streetNumber": "1", "settlement": "София"}
+    official_data = {"address": same_address, "correspondence_address": dict(same_address)}
+
+    result = merge_addresses(official_data, {"addresses": []})
+
+    assert len(result) == 1
+    assert result[0]["label"] == "Адрес на управление"
+
+
+def test_merge_addresses_all_web_addresses_differ_when_no_official_data():
+    web_result = {"addresses": [{"address": "гр. Варна, ул. Уеб 1", "context": None,
+                                  "source_url": None}]}
+
+    result = merge_addresses(None, web_result)
+
+    assert result == [
+        {
+            "address": "гр. Варна, ул. Уеб 1",
+            "source": "web",
+            "label": None,
+            "context": None,
+            "source_url": None,
+            "differs_from_registry": True,
+        }
+    ]
+
+
+def test_merge_addresses_flags_web_address_matching_registry_as_not_differing():
+    official_data = {
+        "address": {"street": "ул. Първа", "streetNumber": "1", "settlement": "София"}
+    }
+    web_result = {"addresses": [{"address": "ул. Първа 1, София, България",
+                                  "context": "сайт", "source_url": "https://x.bg"}]}
+
+    result = merge_addresses(official_data, web_result)
+
+    web_entry = next(a for a in result if a["source"] == "web")
+    assert web_entry["differs_from_registry"] is False
+
+
+def test_merge_addresses_flags_web_address_differing_from_registry():
+    official_data = {
+        "address": {"street": "ул. Първа", "streetNumber": "1", "settlement": "София"}
+    }
+    web_result = {"addresses": [{"address": "гр. Бургас, ул. Съвсем Друга 9",
+                                  "context": "офис", "source_url": "https://x.bg"}]}
+
+    result = merge_addresses(official_data, web_result)
+
+    web_entry = next(a for a in result if a["source"] == "web")
+    assert web_entry["differs_from_registry"] is True
+
+
+def test_merge_addresses_skips_web_items_without_address_text():
+    result = merge_addresses(None, {"addresses": [{"address": "", "context": None,
+                                                     "source_url": None}]})
+
+    assert result == []
 
 
 @patch("bg_company_lookup.research.genai.Client")
