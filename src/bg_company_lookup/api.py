@@ -22,7 +22,7 @@ from flask import Flask, jsonify, request
 from bg_company_lookup import priority, research
 from bg_company_lookup.cache import TTLCache
 from bg_company_lookup.core import CompanyNotFound, LookupServiceError, lookup
-from bg_company_lookup.research import ResearchServiceError
+from bg_company_lookup.research import ResearchServiceError, merge_addresses
 
 MAX_QUERY_LENGTH = 200
 REPORT_CACHE_TTL_SECONDS = int(os.environ.get("REPORT_CACHE_TTL_SECONDS", 6 * 60 * 60))
@@ -213,6 +213,7 @@ INDEX_HTML = """<!doctype html>
   }
 
   .badge.active { background: var(--color-accent); }
+  .badge.warn { background: var(--color-destructive); }
 
   .report-text { font-size: 0.9rem; }
   .report-text h1, .report-text h2, .report-text h3 {
@@ -295,6 +296,16 @@ INDEX_HTML = """<!doctype html>
     padding: 0.5rem 0.65rem; font-size: 0.85rem;
   }
   .priority-list .hint { display: block; margin-top: 0.25rem; }
+
+  .address-list {
+    list-style: none; padding: 0; margin: 0.6rem 0 0;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .address-list li {
+    border: 1px solid var(--color-border); border-radius: 8px;
+    padding: 0.5rem 0.65rem; font-size: 0.85rem;
+  }
+  .address-list .hint { display: block; margin-top: 0.25rem; }
 
   @media (prefers-reduced-motion: reduce) {
     button { transition: none; }
@@ -433,6 +444,29 @@ function renderPriorityAssessment(assessment) {
   `;
 }
 
+function renderAddresses(addresses) {
+  if (!addresses || addresses.length === 0) {
+    return '<p class="empty">Няма намерени адреси.</p>';
+  }
+  return '<ul class="address-list">' + addresses.map(a => {
+    const sourceBadge = a.source === 'web'
+      ? '<span class="badge active">уеб</span>'
+      : '<span class="badge">регистър</span>';
+    const warnBadge = a.differs_from_registry
+      ? ' <span class="badge warn">различен от регистъра</span>'
+      : '';
+    const label = a.label ? '<strong>' + escapeHtml(a.label) + ':</strong> ' : '';
+    const context = a.context
+      ? '<span class="hint">' + escapeHtml(a.context) + '</span>' : '';
+    const link = a.source_url
+      ? '<span class="hint"><a href="' + escapeHtml(a.source_url) +
+        '" target="_blank" rel="noopener">' + escapeHtml(a.source_url) + '</a></span>'
+      : '';
+    return '<li>' + sourceBadge + warnBadge + ' ' + label + escapeHtml(a.address) +
+      context + link + '</li>';
+  }).join('') + '</ul>';
+}
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = qInput.value.trim();
@@ -469,6 +503,8 @@ form.addEventListener('submit', async (e) => {
       <div class="tabs" role="tablist">
         <button type="button" class="tab-btn active" data-tab="official"
           role="tab" aria-selected="true">Официални данни</button>
+        <button type="button" class="tab-btn" data-tab="addresses"
+          role="tab" aria-selected="false">Адреси</button>
         <button type="button" class="tab-btn" data-tab="report"
           role="tab" aria-selected="false">Обединен доклад</button>
         <button type="button" class="tab-btn" data-tab="sources"
@@ -480,6 +516,10 @@ form.addEventListener('submit', async (e) => {
         <div class="tab-panel active" id="tab-official">
           <h2>Официални данни от регистъра</h2>
           ${renderOfficialData(body.official_data)}
+        </div>
+        <div class="tab-panel" id="tab-addresses">
+          <h2>Адреси</h2>
+          ${renderAddresses(body.addresses)}
         </div>
         <div class="tab-panel" id="tab-report">
           <h2>Обединен доклад</h2>
@@ -589,17 +629,19 @@ def create_app(
         if cached is not None:
             return jsonify(cached)
 
-        # lookup() (companybook.bg) и research() (Gemini) не зависят един от друг —
-        # изпълняват се успоредно, за да срежем общото latency (важно за да не удряме
-        # Render-ия gateway timeout, тъй като cross_check() после добавя още едно
+        # lookup() (companybook.bg), research() и find_addresses() (и двете Gemini) не зависят
+        # едно от друго — изпълняват се успоредно, за да срежем общото latency (важно за да не
+        # удряме Render-ия gateway timeout, тъй като cross_check() после добавя още едно
         # последователно Gemini извикване).
         official_data = None
         research_result = None
+        addresses_result = None
         early_response = None
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             lookup_future = executor.submit(lookup, q)
             research_future = executor.submit(research.research, q)
+            addresses_future = executor.submit(research.find_addresses, q)
 
             try:
                 official_data = lookup_future.result()
@@ -628,6 +670,20 @@ def create_app(
                     502,
                 )
 
+            try:
+                addresses_result = addresses_future.result()
+            except RuntimeError as e:
+                early_response = early_response or (jsonify({"error": str(e)}), 500)
+            except ResearchServiceError as e:
+                app.logger.error("Gemini API upstream error (find_addresses): %s", e)
+                early_response = early_response or (jsonify({"error": str(e)}), 502)
+            except Exception as e:
+                app.logger.exception("unexpected error handling /api/report (find_addresses step)")
+                early_response = early_response or (
+                    jsonify({"error": f"unexpected error: {e}"}),
+                    502,
+                )
+
         if early_response:
             return early_response
 
@@ -650,6 +706,7 @@ def create_app(
             "official_data": official_data,
             "web_context_sources": research_result["sources"],
             "priority_assessment": priority_assessment,
+            "addresses": merge_addresses(official_data, addresses_result),
         }
         report_cache.set(cache_key, result)
         return jsonify(result)
