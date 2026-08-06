@@ -302,9 +302,7 @@ def merge_addresses(official_data: dict | None, web_result: dict) -> list[dict]:
         if not web_text:
             continue
         normalized_web = _normalize_address(web_text)
-        differs = not any(
-            normalized_web in reg or reg in normalized_web for reg in registry_texts
-        )
+        differs = not any(normalized_web in reg or reg in normalized_web for reg in registry_texts)
         merged.append(
             {
                 "address": web_text,

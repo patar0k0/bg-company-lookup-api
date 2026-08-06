@@ -258,8 +258,9 @@ def test_merge_addresses_skips_duplicate_correspondence_address():
 
 
 def test_merge_addresses_all_web_addresses_differ_when_no_official_data():
-    web_result = {"addresses": [{"address": "гр. Варна, ул. Уеб 1", "context": None,
-                                  "source_url": None}]}
+    web_result = {
+        "addresses": [{"address": "гр. Варна, ул. Уеб 1", "context": None, "source_url": None}]
+    }
 
     result = merge_addresses(None, web_result)
 
@@ -276,11 +277,16 @@ def test_merge_addresses_all_web_addresses_differ_when_no_official_data():
 
 
 def test_merge_addresses_flags_web_address_matching_registry_as_not_differing():
-    official_data = {
-        "address": {"street": "ул. Първа", "streetNumber": "1", "settlement": "София"}
+    official_data = {"address": {"street": "ул. Първа", "streetNumber": "1", "settlement": "София"}}
+    web_result = {
+        "addresses": [
+            {
+                "address": "ул. Първа 1, София, България",
+                "context": "сайт",
+                "source_url": "https://x.bg",
+            }
+        ]
     }
-    web_result = {"addresses": [{"address": "ул. Първа 1, София, България",
-                                  "context": "сайт", "source_url": "https://x.bg"}]}
 
     result = merge_addresses(official_data, web_result)
 
@@ -289,11 +295,16 @@ def test_merge_addresses_flags_web_address_matching_registry_as_not_differing():
 
 
 def test_merge_addresses_flags_web_address_differing_from_registry():
-    official_data = {
-        "address": {"street": "ул. Първа", "streetNumber": "1", "settlement": "София"}
+    official_data = {"address": {"street": "ул. Първа", "streetNumber": "1", "settlement": "София"}}
+    web_result = {
+        "addresses": [
+            {
+                "address": "гр. Бургас, ул. Съвсем Друга 9",
+                "context": "офис",
+                "source_url": "https://x.bg",
+            }
+        ]
     }
-    web_result = {"addresses": [{"address": "гр. Бургас, ул. Съвсем Друга 9",
-                                  "context": "офис", "source_url": "https://x.bg"}]}
 
     result = merge_addresses(official_data, web_result)
 
@@ -302,8 +313,9 @@ def test_merge_addresses_flags_web_address_differing_from_registry():
 
 
 def test_merge_addresses_skips_web_items_without_address_text():
-    result = merge_addresses(None, {"addresses": [{"address": "", "context": None,
-                                                     "source_url": None}]})
+    result = merge_addresses(
+        None, {"addresses": [{"address": "", "context": None, "source_url": None}]}
+    )
 
     assert result == []
 

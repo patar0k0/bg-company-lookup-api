@@ -204,6 +204,17 @@ INDEX_HTML = """<!doctype html>
   }
 
   .badge.active { background: var(--color-accent); }
+  .badge.warn { background: var(--color-destructive); }
+
+  ul.address-list {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 0.6rem;
+  }
+  ul.address-list li {
+    border: 1px solid var(--color-border); border-radius: 8px; padding: 0.6rem 0.75rem;
+    font-size: 0.9rem;
+  }
+  ul.address-list .hint { display: block; margin-top: 0.3rem; }
 
   .report-text { font-size: 0.95rem; }
   .report-text h1, .report-text h2, .report-text h3 {
@@ -332,6 +343,29 @@ function renderSources(sources) {
   }).join('') + '</ul>';
 }
 
+function renderAddresses(addresses) {
+  if (!addresses || addresses.length === 0) {
+    return '<p class="empty">Няма намерени адреси.</p>';
+  }
+  return '<ul class="address-list">' + addresses.map(a => {
+    const sourceBadge = a.source === 'web'
+      ? '<span class="badge active">уеб</span>'
+      : '<span class="badge">регистър</span>';
+    const warnBadge = a.differs_from_registry
+      ? ' <span class="badge warn">различен от регистъра</span>'
+      : '';
+    const label = a.label ? '<strong>' + escapeHtml(a.label) + ':</strong> ' : '';
+    const context = a.context
+      ? '<span class="hint">' + escapeHtml(a.context) + '</span>' : '';
+    const link = a.source_url
+      ? '<span class="hint"><a href="' + escapeHtml(a.source_url) +
+        '" target="_blank" rel="noopener">' + escapeHtml(a.source_url) + '</a></span>'
+      : '';
+    return '<li>' + sourceBadge + warnBadge + ' ' + label + escapeHtml(a.address) +
+      context + link + '</li>';
+  }).join('') + '</ul>';
+}
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = qInput.value.trim();
@@ -368,6 +402,10 @@ form.addEventListener('submit', async (e) => {
       <div class="card section">
         <h2>Официални данни от регистъра</h2>
         ${renderOfficialData(body.official_data)}
+      </div>
+      <div class="card section">
+        <h2>Адреси</h2>
+        ${renderAddresses(body.addresses)}
       </div>
       <div class="card section">
         <h2>Обединен доклад</h2>
@@ -521,9 +559,7 @@ def create_app(
                 app.logger.error("Gemini API upstream error (find_addresses): %s", e)
                 early_response = early_response or (jsonify({"error": str(e)}), 502)
             except Exception as e:
-                app.logger.exception(
-                    "unexpected error handling /api/report (find_addresses step)"
-                )
+                app.logger.exception("unexpected error handling /api/report (find_addresses step)")
                 early_response = early_response or (
                     jsonify({"error": f"unexpected error: {e}"}),
                     502,

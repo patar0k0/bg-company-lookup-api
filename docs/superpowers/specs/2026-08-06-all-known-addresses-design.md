@@ -139,6 +139,13 @@ New `renderAddresses(addresses)` JS function + a new `<div class="card section">
   (reusing the existing `ul.sources`-style link treatment)
 - empty state: "Няма намерени адреси." (reuses `.empty` class) if the list is empty
 
+Note: this branch (`design/all-known-addresses`) forked before the tabs/priority-assessment UI
+rework landed on `feature/priority-assessment-tab` — `api.py` here still has the original
+card-based result layout (`renderOfficialData`/`renderSources` each in their own `.card
+section`). This plan targets that current state; if/when the branches are reconciled, the new
+"Адреси" card's markup translates directly into a tab panel (same render function, different
+wrapper), so no logic needs to change.
+
 ## Testing
 
 - `tests/test_research.py`:
