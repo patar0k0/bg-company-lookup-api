@@ -160,11 +160,21 @@ def test_report_rejects_missing_token_when_configured(protected_client):
 @patch("bg_company_lookup.api.research")
 @patch("bg_company_lookup.api.lookup")
 def test_report_returns_combined_json(mock_lookup, mock_research_module, client):
-    mock_lookup.return_value = {"uic": "106590295", "name": "ДЕКОРАМЕТ"}
+    mock_lookup.return_value = {
+        "uic": "106590295",
+        "name": "ДЕКОРАМЕТ",
+        "address": {"street": "ул. Първа", "streetNumber": "1", "settlement": "София"},
+    }
     mock_research_module.research.return_value = {
         "query": "106590295",
         "answer": "уеб контекст",
         "sources": [{"title": "т", "url": "u"}],
+    }
+    mock_research_module.find_addresses.return_value = {
+        "query": "106590295",
+        "addresses": [
+            {"address": "гр. Пловдив, бул. Тест 5", "context": "офис", "source_url": "https://x.bg"}
+        ],
     }
     mock_research_module.cross_check.return_value = "обединен доклад"
 
@@ -175,8 +185,26 @@ def test_report_returns_combined_json(mock_lookup, mock_research_module, client)
     assert body["report"] == "обединен доклад"
     assert body["official_data"]["uic"] == "106590295"
     assert body["web_context_sources"] == [{"title": "т", "url": "u"}]
+    assert body["addresses"] == [
+        {
+            "address": "ул. Първа, 1, София",
+            "source": "registry",
+            "label": "Адрес на управление",
+            "context": None,
+            "source_url": None,
+            "differs_from_registry": None,
+        },
+        {
+            "address": "гр. Пловдив, бул. Тест 5",
+            "source": "web",
+            "label": None,
+            "context": "офис",
+            "source_url": "https://x.bg",
+            "differs_from_registry": True,
+        },
+    ]
     mock_research_module.cross_check.assert_called_once_with(
-        "106590295", {"uic": "106590295", "name": "ДЕКОРАМЕТ"}, "уеб контекст"
+        "106590295", mock_lookup.return_value, "уеб контекст"
     )
 
 
@@ -189,6 +217,10 @@ def test_report_degrades_when_company_not_found(mock_lookup, mock_research_modul
         "answer": "уеб контекст",
         "sources": [],
     }
+    mock_research_module.find_addresses.return_value = {
+        "query": "непозната фирма",
+        "addresses": [],
+    }
     mock_research_module.cross_check.return_value = "доклад само от уеб"
 
     resp = client.get("/api/report", query_string={"q": "непозната фирма"})
@@ -196,6 +228,7 @@ def test_report_degrades_when_company_not_found(mock_lookup, mock_research_modul
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["official_data"] is None
+    assert body["addresses"] == []
     assert body["report"] == "доклад само от уеб"
     mock_research_module.cross_check.assert_called_once_with(
         "непозната фирма", None, "уеб контекст"
@@ -238,6 +271,22 @@ def test_report_returns_502_when_research_fails(mock_lookup, mock_research_modul
 
 @patch("bg_company_lookup.api.research")
 @patch("bg_company_lookup.api.lookup")
+def test_report_returns_502_when_find_addresses_fails(mock_lookup, mock_research_module, client):
+    mock_lookup.return_value = {"uic": "106590295", "name": "ДЕКОРАМЕТ"}
+    mock_research_module.research.return_value = {
+        "query": "106590295",
+        "answer": "уеб контекст",
+        "sources": [],
+    }
+    mock_research_module.find_addresses.side_effect = ResearchServiceError("Gemini недостъпен")
+
+    resp = client.get("/api/report", query_string={"q": "106590295"})
+
+    assert resp.status_code == 502
+
+
+@patch("bg_company_lookup.api.research")
+@patch("bg_company_lookup.api.lookup")
 def test_report_returns_502_when_cross_check_fails(mock_lookup, mock_research_module, client):
     mock_lookup.return_value = {"uic": "106590295", "name": "ДЕКОРАМЕТ"}
     mock_research_module.research.return_value = {
@@ -261,6 +310,7 @@ def test_report_second_call_is_served_from_cache(mock_lookup, mock_research_modu
         "answer": "уеб контекст",
         "sources": [],
     }
+    mock_research_module.find_addresses.return_value = {"query": "106590295", "addresses": []}
     mock_research_module.cross_check.return_value = "доклад"
 
     first = client.get("/api/report", query_string={"q": "106590295"})
@@ -271,6 +321,7 @@ def test_report_second_call_is_served_from_cache(mock_lookup, mock_research_modu
     assert second.get_json() == first.get_json()
     assert mock_lookup.call_count == 1
     assert mock_research_module.research.call_count == 1
+    assert mock_research_module.find_addresses.call_count == 1
     assert mock_research_module.cross_check.call_count == 1
 
 

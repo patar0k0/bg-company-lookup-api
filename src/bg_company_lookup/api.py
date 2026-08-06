@@ -22,7 +22,7 @@ from flask import Flask, jsonify, request
 from bg_company_lookup import research
 from bg_company_lookup.cache import TTLCache
 from bg_company_lookup.core import CompanyNotFound, LookupServiceError, lookup
-from bg_company_lookup.research import ResearchServiceError
+from bg_company_lookup.research import ResearchServiceError, merge_addresses
 
 MAX_QUERY_LENGTH = 200
 REPORT_CACHE_TTL_SECONDS = int(os.environ.get("REPORT_CACHE_TTL_SECONDS", 6 * 60 * 60))
@@ -472,17 +472,19 @@ def create_app(
         if cached is not None:
             return jsonify(cached)
 
-        # lookup() (companybook.bg) и research() (Gemini) не зависят един от друг —
-        # изпълняват се успоредно, за да срежем общото latency (важно за да не удряме
-        # Render-ия gateway timeout, тъй като cross_check() после добавя още едно
+        # lookup() (companybook.bg), research() и find_addresses() (и двете Gemini) не зависят
+        # едно от друго — изпълняват се успоредно, за да срежем общото latency (важно за да не
+        # удряме Render-ия gateway timeout, тъй като cross_check() после добавя още едно
         # последователно Gemini извикване).
         official_data = None
         research_result = None
+        addresses_result = None
         early_response = None
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             lookup_future = executor.submit(lookup, q)
             research_future = executor.submit(research.research, q)
+            addresses_future = executor.submit(research.find_addresses, q)
 
             try:
                 official_data = lookup_future.result()
@@ -511,6 +513,22 @@ def create_app(
                     502,
                 )
 
+            try:
+                addresses_result = addresses_future.result()
+            except RuntimeError as e:
+                early_response = early_response or (jsonify({"error": str(e)}), 500)
+            except ResearchServiceError as e:
+                app.logger.error("Gemini API upstream error (find_addresses): %s", e)
+                early_response = early_response or (jsonify({"error": str(e)}), 502)
+            except Exception as e:
+                app.logger.exception(
+                    "unexpected error handling /api/report (find_addresses step)"
+                )
+                early_response = early_response or (
+                    jsonify({"error": f"unexpected error: {e}"}),
+                    502,
+                )
+
         if early_response:
             return early_response
 
@@ -530,6 +548,7 @@ def create_app(
             "report": report_text,
             "official_data": official_data,
             "web_context_sources": research_result["sources"],
+            "addresses": merge_addresses(official_data, addresses_result),
         }
         report_cache.set(cache_key, result)
         return jsonify(result)
