@@ -161,3 +161,70 @@ def cross_check(
     response = _generate_with_fallback(client, prompt, model=model)
 
     return response.text
+
+
+ADDRESSES_PROMPT_TEMPLATE = """Намери всички известни физически адреси на фирмата „{query}“ — \
+офиси, обекти, магазини, складове, производствени бази — от сайта на фирмата, Google Maps, \
+бизнес указатели, обяви и други източници.
+
+Върни САМО чист JSON списък (без markdown форматиране, без обяснения преди или след), от обекти \
+във формат:
+[{{"address": "пълен адрес като текст", "context": "кратко описание откъде/какво е (или null)", \
+"source_url": "URL на източника (или null)"}}]
+
+Ако не намериш нищо конкретно, върни []."""
+
+
+def _parse_addresses_json(text: str | None) -> list[dict]:
+    if not text:
+        return []
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").strip()
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:].strip()
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+
+    addresses = []
+    for item in parsed:
+        if not isinstance(item, dict) or not item.get("address"):
+            continue
+        addresses.append(
+            {
+                "address": item.get("address"),
+                "context": item.get("context"),
+                "source_url": item.get("source_url"),
+            }
+        )
+    return addresses
+
+
+def find_addresses(query: str, api_key: str | None = None, model: str | None = None) -> dict:
+    """
+    Уеб търсене (Google Search grounding) за всички известни физически адреси на фирмата.
+
+    Връща: {"query": ..., "addresses": [{"address": str, "context": str | None,
+                                          "source_url": str | None}, ...]}
+
+    При невалиден/непарсируем JSON отговор от модела връща addresses=[] (soft degrade) —
+    само upstream грешки (липсващ ключ, недостъпен Gemini) се третират като изключения.
+
+    Хвърля:
+        RuntimeError         — липсва GEMINI_API_KEY
+        ResearchServiceError — Gemini API недостъпен/грешка при извикване
+    """
+    client = _client(api_key)
+    prompt = ADDRESSES_PROMPT_TEMPLATE.format(query=query)
+    response = _generate_with_fallback(
+        client,
+        prompt,
+        config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
+        model=model,
+    )
+
+    return {"query": query, "addresses": _parse_addresses_json(response.text)}
