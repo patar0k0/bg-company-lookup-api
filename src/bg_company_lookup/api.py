@@ -19,7 +19,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 
-from bg_company_lookup import research
+from bg_company_lookup import priority, research
 from bg_company_lookup.cache import TTLCache
 from bg_company_lookup.core import CompanyNotFound, LookupServiceError, lookup
 from bg_company_lookup.research import ResearchServiceError
@@ -514,6 +514,8 @@ def create_app(
         if early_response:
             return early_response
 
+        priority_assessment = priority.evaluate(official_data) if official_data else None
+
         try:
             report_text = research.cross_check(q, official_data, research_result["answer"])
         except RuntimeError as e:
@@ -530,6 +532,7 @@ def create_app(
             "report": report_text,
             "official_data": official_data,
             "web_context_sources": research_result["sources"],
+            "priority_assessment": priority_assessment,
         }
         report_cache.set(cache_key, result)
         return jsonify(result)

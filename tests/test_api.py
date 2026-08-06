@@ -160,7 +160,12 @@ def test_report_rejects_missing_token_when_configured(protected_client):
 @patch("bg_company_lookup.api.research")
 @patch("bg_company_lookup.api.lookup")
 def test_report_returns_combined_json(mock_lookup, mock_research_module, client):
-    mock_lookup.return_value = {"uic": "106590295", "name": "ДЕКОРАМЕТ"}
+    mock_lookup.return_value = {
+        "uic": "106590295",
+        "name": "ДЕКОРАМЕТ",
+        "address": {"municipality": "Враца", "district": "Враца"},
+        "activity": {"nkids": [{"code": "2110", "description": "Производство на лекарства"}]},
+    }
     mock_research_module.research.return_value = {
         "query": "106590295",
         "answer": "уеб контекст",
@@ -175,8 +180,11 @@ def test_report_returns_combined_json(mock_lookup, mock_research_module, client)
     assert body["report"] == "обединен доклад"
     assert body["official_data"]["uic"] == "106590295"
     assert body["web_context_sources"] == [{"title": "т", "url": "u"}]
+    assert body["priority_assessment"]["municipality"]["matched"] is True
+    assert body["priority_assessment"]["activity"]["matched"] is True
+    assert body["priority_assessment"]["auto_matched_count"] == 2
     mock_research_module.cross_check.assert_called_once_with(
-        "106590295", {"uic": "106590295", "name": "ДЕКОРАМЕТ"}, "уеб контекст"
+        "106590295", mock_lookup.return_value, "уеб контекст"
     )
 
 
@@ -196,6 +204,7 @@ def test_report_degrades_when_company_not_found(mock_lookup, mock_research_modul
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["official_data"] is None
+    assert body["priority_assessment"] is None
     assert body["report"] == "доклад само от уеб"
     mock_research_module.cross_check.assert_called_once_with(
         "непозната фирма", None, "уеб контекст"
