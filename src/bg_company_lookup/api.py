@@ -19,7 +19,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 
-from bg_company_lookup import research
+from bg_company_lookup import priority, research
 from bg_company_lookup.cache import TTLCache
 from bg_company_lookup.core import CompanyNotFound, LookupServiceError, lookup
 from bg_company_lookup.research import ResearchServiceError, merge_addresses
@@ -80,47 +80,56 @@ INDEX_HTML = """<!doctype html>
     color: var(--color-foreground);
     max-width: 720px;
     margin: 0 auto;
-    padding: 2.5rem 1.25rem 4rem;
-    line-height: 1.6;
-    font-size: 16px;
+    padding: 1.5rem 1rem 2rem;
+    line-height: 1.5;
+    font-size: 15px;
   }
 
   h1 {
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: 1.6rem;
-    margin: 0 0 0.4rem;
+    font-size: 1.35rem;
+    margin: 0 0 0.3rem;
   }
 
   .subtitle {
     color: var(--color-muted-fg);
-    margin: 0 0 2rem;
-    font-size: 0.95rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.9rem;
   }
 
   .card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
   }
 
   label {
     display: block;
     font-weight: 600;
-    font-size: 0.875rem;
-    margin-bottom: 0.35rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.3rem;
   }
 
-  .field { margin-bottom: 1rem; }
-  .field:last-of-type { margin-bottom: 1.25rem; }
+  .field { margin-bottom: 0.75rem; }
+  .field:last-of-type { margin-bottom: 0.9rem; }
+
+  .form-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+  }
+  .form-row .field { flex: 1 1 180px; margin-bottom: 0; }
+  .form-row button { flex: 0 0 auto; width: auto; white-space: nowrap; }
 
   input[type=text], input[type=password] {
     width: 100%;
     font-family: var(--font-body);
-    font-size: 1rem;
-    padding: 0.65rem 0.75rem;
+    font-size: 0.95rem;
+    padding: 0.5rem 0.65rem;
     border: 1px solid var(--color-border);
     border-radius: 8px;
     background: var(--color-background);
@@ -143,8 +152,8 @@ INDEX_HTML = """<!doctype html>
     width: 100%;
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: 1rem;
-    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    padding: 0.6rem 1rem;
     border: none;
     border-radius: 8px;
     background: var(--color-accent);
@@ -157,40 +166,40 @@ INDEX_HTML = """<!doctype html>
   button:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
   button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  #status { margin: 1rem 0; font-size: 0.9rem; color: var(--color-muted-fg); }
+  #status { margin: 0.75rem 0; font-size: 0.85rem; color: var(--color-muted-fg); }
 
   .error-box {
     background: var(--color-destructive-bg);
     border: 1px solid var(--color-destructive);
     color: var(--color-destructive);
     border-radius: 8px;
-    padding: 0.85rem 1rem;
-    font-size: 0.9rem;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.85rem;
     font-weight: 600;
   }
 
   .section h2 {
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: 1.05rem;
-    margin: 0 0 0.85rem;
+    font-size: 0.95rem;
+    margin: 0 0 0.6rem;
   }
 
   .meta-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem 1.25rem;
-    font-size: 0.9rem;
+    gap: 0.4rem 1rem;
+    font-size: 0.85rem;
     color: var(--color-muted-fg);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
   }
 
   .company-name {
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: 1.15rem;
-    margin: 0 0 0.5rem;
+    font-size: 1.05rem;
+    margin: 0 0 0.4rem;
   }
 
   .badge {
@@ -206,58 +215,97 @@ INDEX_HTML = """<!doctype html>
   .badge.active { background: var(--color-accent); }
   .badge.warn { background: var(--color-destructive); }
 
-  ul.address-list {
-    list-style: none; padding: 0; margin: 0;
-    display: flex; flex-direction: column; gap: 0.6rem;
-  }
-  ul.address-list li {
-    border: 1px solid var(--color-border); border-radius: 8px; padding: 0.6rem 0.75rem;
-    font-size: 0.9rem;
-  }
-  ul.address-list .hint { display: block; margin-top: 0.3rem; }
-
-  .report-text { font-size: 0.95rem; }
+  .report-text { font-size: 0.9rem; }
   .report-text h1, .report-text h2, .report-text h3 {
     font-family: var(--font-heading);
     font-weight: 600;
-    margin: 1.25rem 0 0.6rem;
+    margin: 0.9rem 0 0.4rem;
   }
   .report-text h1:first-child, .report-text h2:first-child,
   .report-text h3:first-child { margin-top: 0; }
-  .report-text p { margin: 0 0 0.85rem; }
-  .report-text ul, .report-text ol { margin: 0 0 0.85rem; padding-left: 1.4rem; }
-  .report-text li { margin-bottom: 0.3rem; }
+  .report-text p { margin: 0 0 0.6rem; }
+  .report-text ul, .report-text ol { margin: 0 0 0.6rem; padding-left: 1.3rem; }
+  .report-text li { margin-bottom: 0.2rem; }
   .report-text strong { font-weight: 700; }
-  .report-text hr { border: none; border-top: 1px solid var(--color-border); margin: 1.25rem 0; }
+  .report-text hr { border: none; border-top: 1px solid var(--color-border); margin: 0.9rem 0; }
   .report-text table {
     border-collapse: collapse;
     width: 100%;
     display: block;
     overflow-x: auto;
-    margin: 0 0 0.85rem;
-    font-size: 0.9rem;
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
   }
   .report-text th, .report-text td {
     border: 1px solid var(--color-border);
-    padding: 0.4rem 0.6rem;
+    padding: 0.35rem 0.5rem;
     text-align: left;
   }
   .report-text th { background: var(--color-background); font-weight: 600; }
 
   ul.sources {
     list-style: none; padding: 0; margin: 0;
-    display: flex; flex-direction: column; gap: 0.5rem;
+    display: flex; flex-direction: column; gap: 0.4rem;
   }
   ul.sources li {
-    border: 1px solid var(--color-border); border-radius: 8px; padding: 0.6rem 0.75rem;
+    border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem 0.65rem;
   }
   ul.sources a {
-    color: var(--color-secondary); text-decoration: none; font-size: 0.9rem;
+    color: var(--color-secondary); text-decoration: none; font-size: 0.85rem;
     word-break: break-all;
   }
   ul.sources a:hover { text-decoration: underline; }
 
-  .empty { color: var(--color-muted-fg); font-style: italic; font-size: 0.9rem; }
+  .empty { color: var(--color-muted-fg); font-style: italic; font-size: 0.85rem; }
+
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .tab-btn {
+    width: auto;
+    flex: 0 0 auto;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    color: var(--color-muted-fg);
+    cursor: pointer;
+  }
+
+  .tab-btn.active {
+    background: var(--color-primary); color: #fff; border-color: var(--color-primary);
+  }
+  .tab-btn:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .priority-list {
+    list-style: none; padding: 0; margin: 0.6rem 0 0;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .priority-list li {
+    border: 1px solid var(--color-border); border-radius: 8px;
+    padding: 0.5rem 0.65rem; font-size: 0.85rem;
+  }
+  .priority-list .hint { display: block; margin-top: 0.25rem; }
+
+  .address-list {
+    list-style: none; padding: 0; margin: 0.6rem 0 0;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .address-list li {
+    border: 1px solid var(--color-border); border-radius: 8px;
+    padding: 0.5rem 0.65rem; font-size: 0.85rem;
+  }
+  .address-list .hint { display: block; margin-top: 0.25rem; }
 
   @media (prefers-reduced-motion: reduce) {
     button { transition: none; }
@@ -269,16 +317,18 @@ INDEX_HTML = """<!doctype html>
 <p class="subtitle">Официални регистърни данни + уеб проверка, обединени в един доклад.</p>
 
 <form id="lookup-form" class="card">
-  <div class="field">
-    <label for="q">ЕИК или име на фирма</label>
-    <input type="text" id="q" name="q" required autocomplete="off">
+  <div class="form-row">
+    <div class="field">
+      <label for="q">ЕИК или име на фирма</label>
+      <input type="text" id="q" name="q" required autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="token">Токен за достъп</label>
+      <input type="password" id="token" name="token" autocomplete="off">
+    </div>
+    <button type="submit" id="submit-btn">Провери фирма</button>
   </div>
-  <div class="field">
-    <label for="token">Токен за достъп</label>
-    <input type="password" id="token" name="token" autocomplete="off">
-    <div class="hint">Пази се локално в браузъра ти, не се праща никъде другаде.</div>
-  </div>
-  <button type="submit" id="submit-btn">Провери фирма</button>
+  <div class="hint">Пази се локално в браузъра ти, не се праща никъде другаде.</div>
 </form>
 
 <div id="status" role="status" aria-live="polite"></div>
@@ -304,6 +354,19 @@ const tokenInput = document.getElementById('token');
 const submitBtn = document.getElementById('submit-btn');
 const statusEl = document.getElementById('status');
 const resultEl = document.getElementById('result');
+
+resultEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  const tab = btn.dataset.tab;
+  resultEl.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b === btn);
+    b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+  });
+  resultEl.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'tab-' + tab);
+  });
+});
 
 tokenInput.value = localStorage.getItem('bg_company_lookup_token') || '';
 
@@ -341,6 +404,44 @@ function renderSources(sources) {
     const href = escapeHtml(s.url);
     return `<li><a href="${href}" target="_blank" rel="noopener">${label}</a></li>`;
   }).join('') + '</ul>';
+}
+
+function renderPriorityAssessment(assessment) {
+  if (!assessment) {
+    return '<p class="empty">Фирмата не е намерена в официалния регистър — ' +
+      'оценката по приоритетни критерии не може да се направи.</p>';
+  }
+  const icon = (matched) => matched ? '✅' : '❌';
+  const m = assessment.municipality;
+  const a = assessment.activity;
+  const d = assessment.district;
+
+  const municipalityLine = m.matched
+    ? 'съвпада с "' + escapeHtml(m.value) + '"'
+    : 'не съвпада с приоритетния списък' + (m.value ? ' (' + escapeHtml(m.value) + ')' : '');
+
+  const divisions = (a.matched_divisions || [])
+    .map(x => escapeHtml(x.code + ' — ' + x.description)).join('; ');
+  const nkids = (a.company_nkids || [])
+    .map(x => escapeHtml((x.code || '?') + ' — ' + (x.description || ''))).join(', ') || '—';
+  const activityLine = a.matched
+    ? 'съвпада с приоритетен клас: ' + divisions
+    : 'не съвпада с приоритетния списък';
+
+  const districtLine = d.matched
+    ? 'съвпада с "' + escapeHtml(d.value) + '"'
+    : 'не съвпада с приоритетния списък' + (d.value ? ' (' + escapeHtml(d.value) + ')' : '');
+
+  return `
+    <p>${assessment.auto_matched_count} от 2 автоматично проверими критерия отговарят.</p>
+    <ul class="priority-list">
+      <li>${icon(m.matched)} <strong>Община:</strong> ${municipalityLine}</li>
+      <li>${icon(a.matched)} <strong>Икономическа дейност:</strong> ${activityLine}
+        <span class="hint">НКИД на фирмата: ${nkids}</span></li>
+      <li>${icon(d.matched)} <strong>Област на седалище:</strong> ${districtLine}
+        <span class="hint">⚠️ ${escapeHtml(d.investment_location_note)}</span></li>
+    </ul>
+  `;
 }
 
 function renderAddresses(addresses) {
@@ -399,21 +500,39 @@ form.addEventListener('submit', async (e) => {
 
     statusEl.innerHTML = '';
     resultEl.innerHTML = `
-      <div class="card section">
-        <h2>Официални данни от регистъра</h2>
-        ${renderOfficialData(body.official_data)}
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab-btn active" data-tab="official"
+          role="tab" aria-selected="true">Официални данни</button>
+        <button type="button" class="tab-btn" data-tab="addresses"
+          role="tab" aria-selected="false">Адреси</button>
+        <button type="button" class="tab-btn" data-tab="report"
+          role="tab" aria-selected="false">Обединен доклад</button>
+        <button type="button" class="tab-btn" data-tab="sources"
+          role="tab" aria-selected="false">Уеб източници</button>
+        <button type="button" class="tab-btn" data-tab="priority"
+          role="tab" aria-selected="false">Оценка на зелени технологии</button>
       </div>
       <div class="card section">
-        <h2>Адреси</h2>
-        ${renderAddresses(body.addresses)}
-      </div>
-      <div class="card section">
-        <h2>Обединен доклад</h2>
-        <div class="report-text">${renderMarkdown(body.report)}</div>
-      </div>
-      <div class="card section">
-        <h2>Уеб източници</h2>
-        ${renderSources(body.web_context_sources)}
+        <div class="tab-panel active" id="tab-official">
+          <h2>Официални данни от регистъра</h2>
+          ${renderOfficialData(body.official_data)}
+        </div>
+        <div class="tab-panel" id="tab-addresses">
+          <h2>Адреси</h2>
+          ${renderAddresses(body.addresses)}
+        </div>
+        <div class="tab-panel" id="tab-report">
+          <h2>Обединен доклад</h2>
+          <div class="report-text">${renderMarkdown(body.report)}</div>
+        </div>
+        <div class="tab-panel" id="tab-sources">
+          <h2>Уеб източници</h2>
+          ${renderSources(body.web_context_sources)}
+        </div>
+        <div class="tab-panel" id="tab-priority">
+          <h2>Оценка на зелени технологии</h2>
+          ${renderPriorityAssessment(body.priority_assessment)}
+        </div>
       </div>
     `;
   } catch (err) {
@@ -568,6 +687,8 @@ def create_app(
         if early_response:
             return early_response
 
+        priority_assessment = priority.evaluate(official_data) if official_data else None
+
         try:
             report_text = research.cross_check(q, official_data, research_result["answer"])
         except RuntimeError as e:
@@ -584,6 +705,7 @@ def create_app(
             "report": report_text,
             "official_data": official_data,
             "web_context_sources": research_result["sources"],
+            "priority_assessment": priority_assessment,
             "addresses": merge_addresses(official_data, addresses_result),
         }
         report_cache.set(cache_key, result)
