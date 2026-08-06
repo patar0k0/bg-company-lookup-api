@@ -250,3 +250,39 @@ def test_report_returns_502_when_cross_check_fails(mock_lookup, mock_research_mo
     resp = client.get("/api/report", query_string={"q": "106590295"})
 
     assert resp.status_code == 502
+
+
+@patch("bg_company_lookup.api.research")
+@patch("bg_company_lookup.api.lookup")
+def test_report_second_call_is_served_from_cache(mock_lookup, mock_research_module, client):
+    mock_lookup.return_value = {"uic": "106590295", "name": "ДЕКОРАМЕТ"}
+    mock_research_module.research.return_value = {
+        "query": "106590295",
+        "answer": "уеб контекст",
+        "sources": [],
+    }
+    mock_research_module.cross_check.return_value = "доклад"
+
+    first = client.get("/api/report", query_string={"q": "106590295"})
+    second = client.get("/api/report", query_string={"q": "  106590295  "})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.get_json() == first.get_json()
+    assert mock_lookup.call_count == 1
+    assert mock_research_module.research.call_count == 1
+    assert mock_research_module.cross_check.call_count == 1
+
+
+@patch("bg_company_lookup.api.research")
+@patch("bg_company_lookup.api.lookup")
+def test_report_does_not_cache_error_responses(mock_lookup, mock_research_module, client):
+    mock_lookup.return_value = {"uic": "106590295", "name": "ДЕКОРАМЕТ"}
+    mock_research_module.research.side_effect = ResearchServiceError("Gemini недостъпен")
+
+    first = client.get("/api/report", query_string={"q": "106590295"})
+    second = client.get("/api/report", query_string={"q": "106590295"})
+
+    assert first.status_code == 502
+    assert second.status_code == 502
+    assert mock_research_module.research.call_count == 2

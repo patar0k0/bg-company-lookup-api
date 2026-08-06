@@ -20,10 +20,12 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 
 from bg_company_lookup import research
+from bg_company_lookup.cache import TTLCache
 from bg_company_lookup.core import CompanyNotFound, LookupServiceError, lookup
 from bg_company_lookup.research import ResearchServiceError
 
 MAX_QUERY_LENGTH = 200
+REPORT_CACHE_TTL_SECONDS = int(os.environ.get("REPORT_CACHE_TTL_SECONDS", 6 * 60 * 60))
 
 load_dotenv()
 
@@ -389,9 +391,13 @@ form.addEventListener('submit', async (e) => {
 </html>"""
 
 
-def create_app(access_token: str | None = None) -> Flask:
+def create_app(
+    access_token: str | None = None,
+    report_cache_ttl_seconds: float = REPORT_CACHE_TTL_SECONDS,
+) -> Flask:
     app = Flask(__name__)
     app.config["ACCESS_TOKEN"] = access_token
+    report_cache = TTLCache(ttl_seconds=report_cache_ttl_seconds)
 
     def _validate_request(q_description: str) -> tuple[str, None] | tuple[None, tuple]:
         token = app.config["ACCESS_TOKEN"]
@@ -461,6 +467,11 @@ def create_app(access_token: str | None = None) -> Flask:
         if error:
             return error
 
+        cache_key = q.strip().lower()
+        cached = report_cache.get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
         # lookup() (companybook.bg) и research() (Gemini) не зависят един от друг —
         # изпълняват се успоредно, за да срежем общото latency (важно за да не удряме
         # Render-ия gateway timeout, тъй като cross_check() после добавя още едно
@@ -514,14 +525,14 @@ def create_app(access_token: str | None = None) -> Flask:
             app.logger.exception("unexpected error handling /api/report (cross_check step)")
             return jsonify({"error": f"unexpected error: {e}"}), 502
 
-        return jsonify(
-            {
-                "query": q,
-                "report": report_text,
-                "official_data": official_data,
-                "web_context_sources": research_result["sources"],
-            }
-        )
+        result = {
+            "query": q,
+            "report": report_text,
+            "official_data": official_data,
+            "web_context_sources": research_result["sources"],
+        }
+        report_cache.set(cache_key, result)
+        return jsonify(result)
 
     @app.route("/")
     def index():

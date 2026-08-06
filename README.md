@@ -10,6 +10,7 @@
 src/bg_company_lookup/
   core.py       — lookup(name_or_eik) + format_profile(); CompanyNotFound / LookupServiceError
   research.py   — research(query) + cross_check(...) през Gemini API; ResearchServiceError
+  cache.py      — TTLCache: прост thread-safe in-memory кеш с TTL
   api.py        — Flask обвивка: /api/company, /api/research, /api/report
   cli.py        — CLI: python -m bg_company_lookup.cli <ЕИК/име> [--json]
 tests/          — pytest, мокнати HTTP/SDK заявки (не удря реалните API-та)
@@ -61,6 +62,11 @@ curl "http://localhost:5000/api/report?q=106590295&token=ТВОЯ_ТОКЕН"
 потвърждава от официалния регистър, се отбелязва изрично като непотвърдено. Връща
 `{"query", "report", "official_data", "web_context_sources"}`. Ако фирмата не е намерена
 в официалния регистър, `official_data` е `null`, а докладът се генерира само от уеб частта.
+
+Успешните отговори се кешират in-memory за `REPORT_CACHE_TTL_SECONDS` секунди (по
+подразбиране 6 часа) по нормализирано `q` (trim + lowercase) — повторно търсене на
+същата фирма е мигновено и не хаби Gemini квота. Грешки не се кешират. Кешът не е
+споделен между gunicorn worker процеси (`-w 2`).
 
 Грешки: `400` невалидна/липсваща/твърде дълга заявка, `401` грешен/липсващ
 token, `404` фирмата не е намерена (само `/api/company`), `500` липсва API ключ на
